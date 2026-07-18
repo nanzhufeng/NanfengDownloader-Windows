@@ -87,13 +87,14 @@ CleanVideoDownloader/
 
 - **已实现且单元测试通过**：39 项 `unittest` 回归测试，覆盖抖音浏览器嗅探等待、下载速度参数、分辨率选择、YouTube 登录/公开重试、媒体有效性、停止、执行时勾选和网络恢复。
 - **已构建且启动验证**：Windows PyInstaller 包可启动；成品内确认存在 FFmpeg、Node.js、PO Provider 构建文件。
-- **已发布**：私有仓库 `nanzhufeng/NanfengDownloader-Windows`，发布标签 `v2026.07.18-windows`。
+- **已发布**：私有仓库 `nanzhufeng/NanfengDownloader-Windows`，发布标签 `v2026.07.19-windows`。
 - **真实服务基线已建立**：YouTube/抖音单视频实际下载和 ffprobe 验证通过，YouTube 频道与抖音作者目录语义通过；详见 `docs/verification/windows-real-regression-20260718.md`。
 
 最新 Windows 发布包：
 
-- GitHub Release：<https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.07.18-windows>
-- 资产：`NanfengDownloader-Windows-v2026.07.18.zip`
+- GitHub Release：<https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.07.19-windows>
+- 资产：`NanfengDownloader-Windows-v2026.07.19-Setup.exe`
+- SHA-256：`809272629DAE697097B41BAD1F54ED66E720E7B7CBF3BE15949DD41FEC791A55`
 - SHA-256：`4E1E170B0301131412B660B7B3CB572DC77177FAC3A40C28706AD1AB4E235355`
 
 ## 6. Git 与发布边界
@@ -102,7 +103,7 @@ CleanVideoDownloader/
 - Windows 发布使用独立 staging 仓库：`dist_new/github-staging-NanzhufengVideoDownloader-Windows-20260718`。
 - 最近发布提交：`83cf49f release(windows): rename product to 南枫下载`。
 - Windows 发布仓库：<https://github.com/nanzhufeng/NanfengDownloader-Windows>（私有）。
-- 每次发布：运行测试 → PyInstaller 输出到新的 `dist_new/<日期>-<主题>/` 目录 → 启动 EXE 验证 → 压缩 ZIP → 计算 SHA-256 → 只将选定 Windows 源文件同步到 staging → 提交、推送、创建 Release。
+- 每次发布：运行测试 → PyInstaller 清洁构建 → Inno Setup 生成 `*-Windows-*-Setup.exe` → 静默安装、依赖、启动和卸载验证 → 计算 SHA-256 → 提交并推送 Windows 源码 → 创建 Release → 核对远端大小和摘要 → 新资产确认后再删除旧 Release。
 
 ## 7. 待处理与风险
 

@@ -12,8 +12,8 @@
 - 产品名称：南枫下载。
 - 品牌图标：继续保留图标内“南烛枫”字样，这是用户明确确认的品牌资产，不属于待重命名内容。
 - 发布仓库：私有仓库 `nanzhufeng/NanfengDownloader-Windows`。
-- Release：`v2026.07.18-windows`。
-- 发布资产：`NanfengDownloader-Windows-v2026.07.18.zip`。
+- Release：`v2026.07.19-windows`。
+- 发布资产：`NanfengDownloader-Windows-v2026.07.19-Setup.exe`。
 - SHA-256：`4E1E170B0301131412B660B7B3CB572DC77177FAC3A40C28706AD1AB4E235355`。
 - Windows 发布 staging 提交：`83cf49f release(windows): rename product to 南枫下载`。
 - 当前源码 Git：根目录正确，分支为 `master`，最新提交是 Android 工作台文档提交；工作区存在尚未提交的 Windows 改动，因此本次不提交、不清理、不重置。
@@ -79,7 +79,7 @@
 | 速度要明显提升但不能虚报 | 单条 YouTube 曾只有数百 KiB/s | HLS/单片段链路、缓冲和并发保守 | 优先 HTTPS DASH、并行分片、较大缓冲、限流后自适应降并发 | 速度参数和降并发测试通过 | 2026-07-18 两个平台固定样本持续平均速度均约 4.84 MiB/s | 速度受源站、格式、线路和限流影响，不能承诺每次达到几 MB/s 或几十 MB/s |
 | UI 要像长期工作台 | 早期表单密集、空入口、重复按钮、系统控件感强 | 信息层级按控件堆叠而非按工作流组织 | 左侧导航、主设置、操作条、大表格、底部状态；状态色、居中列、稳定反馈空间 | Windows 构建和启动通过 | 用户多轮截图确认最终方向 | 尚未建立自动截图基线和键盘/无障碍验收 |
 | 完成时要明确提醒 | 批量结束后用户不确定是否完成 | 队列结束只有进度变化，没有终态事件 | 批量终态弹窗与状态汇总 | 当前代码已实现 | 未在本轮做完整长队列回归 | 全部跳过、部分失败、用户停止应保持不同完成文案 |
-| 交付名称与平台要一致 | 旧名称、不同 spec/脚本/仓库容易混淆 | 产品名、品牌资产、内部目录和平台包未分层 | 用户名“南枫下载”，图标保留“南烛枫”；Windows 包和仓库显式带 Windows；独立导出器建立 Windows 源码边界 | PyInstaller 构建、启动、ZIP、哈希和 Release 已验证；Windows 导出、测试、构建和本地提交通过 | Windows Release 已发布 | 当前混合根保留历史，后续修改需迁入 Windows 独立仓库 |
+| 交付名称与平台要一致 | 旧名称、不同 spec/脚本/仓库容易混淆 | 产品名、品牌资产、内部目录和平台包未分层 | 用户名“南枫下载”，图标保留“南烛枫”；Windows 包和仓库显式带 Windows；独立导出器建立 Windows 源码边界 | PyInstaller、Inno Setup、静默安装、启动、卸载、哈希和 Release 已验证；Windows 导出、测试、构建和提交通过 | Windows Inno Setup Release 已发布 | 当前混合根保留历史，后续修改需迁入 Windows 独立仓库 |
 
 ## 5. UI 与交互的稳定结论
 
@@ -197,7 +197,7 @@
 | 集成环境 | 打包 EXE 曾持续运行超过 8 秒；随包 FFmpeg、Node.js 和 PO Provider 已确认存在 |
 | 真实服务 | 2026-07-18 已建立固定报告：YouTube/抖音单视频均完成实际下载、ffprobe 媒体验证和持续速度记录；YouTube 频道与抖音作者入口完成真实目录语义验证 |
 | 完整用户链路 | 2026-07-18 已完成 YouTube/抖音单视频真实下载和媒体探测、YouTube 频道与抖音作者目录语义；其余分辨率、真实断网与 GUI 大文件停止仍待里程碑抽查 |
-| 发布 | Windows ZIP、哈希、私有仓库和 Release 已完成 |
+| 发布 | Windows Inno Setup 安装包、哈希、私有仓库和 Release 已完成 |
 
 ## 13. 下轮优先事项
 
