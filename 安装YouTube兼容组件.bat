@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Nanzhufeng Video Downloader - YouTube Compatibility Setup
+title Nanfeng Downloader - YouTube Compatibility Setup
 
 set "PROJECT_ROOT=%~dp0"
 set "RUNTIME_ROOT=%LOCALAPPDATA%\NanzhufengVideoDownloader"

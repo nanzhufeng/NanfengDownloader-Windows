@@ -1,4 +1,4 @@
-# 南烛枫视频下载器开发完整情况：ChatGPT 长期理解版
+# 南枫下载开发完整情况：ChatGPT 长期理解版
 
 > 生成时间：2026-07-12  
 > 项目路径：`D:\CodexProjects\江湖工具箱\CleanVideoDownloader`  
@@ -7,7 +7,7 @@
 
 ## 1. 结论
 
-`南烛枫视频下载器` 是一个面向南烛枫个人工作流的 PySide6 桌面视频下载工具。它从早期参考“江湖工具箱”的下载能力出发，逐步重做成更简化、更美观、更适合批量选择下载的工作台式软件。
+`南枫下载` 是一个面向南烛枫个人工作流的 PySide6 桌面视频下载工具。它从早期参考“江湖工具箱”的下载能力出发，逐步重做成更简化、更美观、更适合批量选择下载的工作台式软件。
 
 当前 Windows 版已经具备可用的 exe 打包产物，支持抖音和 YouTube，支持公开内容及登录后账号有权限访问的内容；不做会员、付费、DRM、私密内容绕过。核心开发经验是：先用 `.bat`/源码跑通，再打包 exe；UI 用工作台布局；下载逻辑要真实生成有效文件；批量读取要区分“单条视频”和“作者/频道列表”；长任务需要可停止、可跳过、可恢复网络重试。
 
@@ -15,8 +15,8 @@
 
 | 项目 | 当前事实 |
 | --- | --- |
-| 对外名称 | 南烛枫视频下载器 |
-| 窗口标题 | 南烛枫 - 视频下载器 |
+| 对外名称 | 南枫下载 |
+| 窗口标题 | 南枫下载 |
 | 项目目录 | `D:\CodexProjects\江湖工具箱\CleanVideoDownloader` |
 | 技术栈 | Python、PySide6、yt-dlp、Playwright、urllib、ffmpeg、PyInstaller |
 | 主入口 | `start.py` |
@@ -25,18 +25,18 @@
 | 抖音解析和下载 | `app/douyin.py` |
 | 通用下载器 | `app/downloader.py` |
 | 软件内登录态 | `app/auth_profile.py` |
-| Windows 启动脚本 | `启动南烛枫视频下载器.bat` |
-| Windows 打包配置 | `南烛枫视频下载器.spec` |
-| Mac 启动脚本 | `启动南烛枫视频下载器.command` |
-| Mac 打包配置 | `南烛枫视频下载器_mac.spec` |
-| Windows exe 目录 | `dist\南烛枫视频下载器\南烛枫视频下载器.exe` |
-| Windows zip | `dist\南烛枫视频下载器-Windows.zip` |
+| Windows 启动脚本 | `启动南枫下载.bat` |
+| Windows 打包配置 | `南枫下载.spec` |
+| Mac 启动脚本 | `启动南枫下载.command` |
+| Mac 打包配置 | `南枫下载_mac.spec` |
+| Windows exe 目录 | `dist\南枫下载\南枫下载.exe` |
+| Windows zip | `dist\南枫下载-Windows.zip` |
 
 默认保存目录逻辑：
 
-- Windows 有 D 盘时优先 `D:\南烛枫视频下载器`。
-- 否则回退到用户下载目录下的 `南烛枫视频下载器`。
-- Mac 版应使用用户目录和 `~/Downloads/南烛枫视频下载器` 这类 Mac 路径，不得硬套 Windows 路径。
+- Windows 有 D 盘时优先 `D:\南枫下载`。
+- 否则回退到用户下载目录下的 `南枫下载`。
+- Mac 版应使用用户目录和 `~/Downloads/南枫下载` 这类 Mac 路径，不得硬套 Windows 路径。
 
 ## 3. 产品定位和边界
 
@@ -194,14 +194,14 @@
 Windows 版已经能用 PyInstaller 生成：
 
 ```text
-dist\南烛枫视频下载器\南烛枫视频下载器.exe
-dist\南烛枫视频下载器-Windows.zip
+dist\南枫下载\南枫下载.exe
+dist\南枫下载-Windows.zip
 ```
 
 打包 spec：
 
 ```text
-南烛枫视频下载器.spec
+南枫下载.spec
 ```
 
 关键打包点：
@@ -227,14 +227,14 @@ dist\南烛枫视频下载器-Windows.zip
 
 已有文件：
 
-- `启动南烛枫视频下载器.command`
+- `启动南枫下载.command`
 - `打包Mac版.command`
-- `南烛枫视频下载器_mac.spec`
+- `南枫下载_mac.spec`
 - `MAC使用说明.md`
 
 Mac 适配目标：
 
-- 登录数据目录：`~/Library/Application Support/NanzhufengVideoDownloader`
+- 登录数据目录：`~/Library/Application Support/NanfengDownloader`
 - Chrome：`/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
 - Edge：`/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge`
 - ffmpeg：`/opt/homebrew/bin/ffmpeg`、`/usr/local/bin/ffmpeg`
@@ -244,8 +244,8 @@ Mac 适配目标：
 Mac 打包目标：
 
 ```text
-dist/南烛枫视频下载器.app
-dist/南烛枫视频下载器_mac.zip
+dist/南枫下载.app
+dist/南枫下载_mac.zip
 ```
 
 ## 8. 已踩过的问题和修复经验
@@ -308,4 +308,4 @@ YouTube 单条 `watch?v=` 链接曾误加载整个频道。已修复为单视频
 
 ## 11. 给未来 ChatGPT 的一句话
 
-把 `南烛枫视频下载器` 当作一个已经多轮真实试用和打包过的个人工作流工具，而不是从零开始的新项目。继续开发时要保护现有 UI 风格、下载边界、单条/批量识别规则和 Windows 打包链路；任何 Mac 版交付都必须在 Mac 本机重新验证。
+把 `南枫下载` 当作一个已经多轮真实试用和打包过的个人工作流工具，而不是从零开始的新项目。继续开发时要保护现有 UI 风格、下载边界、单条/批量识别规则和 Windows 打包链路；任何 Mac 版交付都必须在 Mac 本机重新验证。

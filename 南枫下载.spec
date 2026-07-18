@@ -16,7 +16,9 @@ tmp_ret = collect_all('yt_dlp_ejs')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 local_app_data = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local'))
-provider_build = local_app_data / 'NanzhufengVideoDownloader' / 'bgutil-ytdlp-pot-provider' / 'server' / 'build'
+provider_build = local_app_data / 'NanfengDownloader' / 'bgutil-ytdlp-pot-provider' / 'server' / 'build'
+if not provider_build.exists():
+    provider_build = local_app_data / 'NanzhufengVideoDownloader' / 'bgutil-ytdlp-pot-provider' / 'server' / 'build'
 if provider_build.exists():
     datas.append((str(provider_build), 'tools/bgutil-ytdlp-pot-provider/server/build'))
 
@@ -45,7 +47,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='南烛枫视频下载器',
+    name='南枫下载',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -65,5 +67,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='南烛枫视频下载器',
+    name='南枫下载',
 )

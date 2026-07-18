@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Nanzhufeng Video Downloader
+title Nanfeng Downloader
 cd /d "%~dp0"
 
 set "LOG=%~dp0startup-log.txt"
@@ -17,7 +17,7 @@ if defined PYTHONW (
     exit /b 0
 )
 
-echo Starting Nanzhufeng Video Downloader...
+echo Starting Nanfeng Downloader...
 echo Log file: %LOG%
 echo.
 echo pythonw.exe was not found, using visible Python fallback. >> "%LOG%"
