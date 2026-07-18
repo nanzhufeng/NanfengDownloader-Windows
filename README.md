@@ -85,6 +85,8 @@ python -m PyInstaller --noconfirm 南枫下载_Windows.spec
 powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
 ```
 
+构建脚本默认使用 Inno Setup 7 x64；仅在 7 未安装时回退到 Inno Setup 6。
+
 安装程序输出到 `installer\NanfengDownloader-Windows-v2026.07.19-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
 
 打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。

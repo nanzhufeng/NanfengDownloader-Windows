@@ -1,18 +1,28 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$CheckCompilerOnly
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
+$isccCandidates = @(
+    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 7\ISCC.exe"),
+    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+)
+$iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
-if (-not (Test-Path -LiteralPath $iscc)) {
-    throw "Inno Setup 6 was not found. Install JRSoftware.InnoSetup first."
+if (-not $iscc) {
+    throw "Inno Setup was not found. Install JRSoftware.InnoSetup.7 first."
 }
 
 Push-Location $projectRoot
 try {
+    Write-Output "Inno compiler: $iscc"
+    if ($CheckCompilerOnly) {
+        return
+    }
+
     if (-not $SkipTests) {
         python -m unittest discover -s tests -v
         if ($LASTEXITCODE -ne 0) {

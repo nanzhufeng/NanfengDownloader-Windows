@@ -22,7 +22,7 @@
 | YouTube 兼容 | `bgutil-ytdlp-pot-provider` 1.3.1、`yt-dlp-ejs` 0.8.0、随包 Node.js |
 | 浏览器自动化 | Playwright |
 | 视频处理 | 随包 FFmpeg |
-| 打包 | PyInstaller 6.21.0，Windows one-folder EXE |
+| 打包 | PyInstaller 6.21.0 one-folder EXE；Inno Setup 7 x64 默认安装器，6 仅兼容回退 |
 | 测试 | Python `unittest`，`tests/` 下 39 项回归测试 |
 | 发布 | 私有 GitHub 仓库与 GitHub Release |
 
@@ -49,7 +49,7 @@ CleanVideoDownloader/
 ├─ start.py                    # 应用入口
 ├─ run.ps1                     # 开发环境启动入口
 ├─ 启动南枫下载.bat            # Windows 直接启动脚本
-├─ 南枫下载.spec               # Windows PyInstaller 配置
+├─ 南枫下载_Windows.spec       # Windows PyInstaller 配置
 ├─ 安装YouTube兼容组件.bat     # 安装 yt-dlp/PO 兼容依赖的辅助脚本
 ├─ 启动南枫下载.command        # Mac 测试启动脚本，必须在 Mac 本机验证
 ├─ 南枫下载_mac.spec           # Mac PyInstaller 配置
@@ -100,10 +100,10 @@ CleanVideoDownloader/
 ## 6. Git 与发布边界
 
 - 当前源码根目录历史混入 Android 相关工作，且工作区长期可能处于 dirty 状态；**不要直接把该根目录推送到 Windows 发布仓库**。
-- Windows 发布使用独立 staging 仓库：`dist_new/github-staging-NanzhufengVideoDownloader-Windows-20260718`。
-- 最近发布提交：`83cf49f release(windows): rename product to 南枫下载`。
+- Windows 发布使用独立仓库：`D:\CodexProjects\NanfengDownloader-Windows`。
+- 当前 Release 标签：`v2026.07.19-windows`。
 - Windows 发布仓库：<https://github.com/nanzhufeng/NanfengDownloader-Windows>（私有）。
-- 每次发布：运行测试 → PyInstaller 清洁构建 → Inno Setup 生成 `*-Windows-*-Setup.exe` → 静默安装、依赖、启动和卸载验证 → 计算 SHA-256 → 提交并推送 Windows 源码 → 创建 Release → 核对远端大小和摘要 → 新资产确认后再删除旧 Release。
+- 每次发布：运行测试 → PyInstaller 清洁构建 → 默认用 Inno Setup 7 x64 生成 `*-Windows-*-Setup.exe` → 静默安装、依赖、启动和卸载验证 → 计算 SHA-256 → 提交并推送 Windows 源码 → 创建 Release → 核对远端大小和摘要 → 新资产确认后再删除旧 Release。Inno Setup 6 只作为兼容回退。
 
 ## 7. 待处理与风险
 

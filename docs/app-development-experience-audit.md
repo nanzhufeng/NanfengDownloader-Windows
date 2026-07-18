@@ -15,7 +15,7 @@
 - Release：`v2026.07.19-windows`。
 - 发布资产：`NanfengDownloader-Windows-v2026.07.19-Setup.exe`。
 - SHA-256：`4E1E170B0301131412B660B7B3CB572DC77177FAC3A40C28706AD1AB4E235355`。
-- Windows 发布 staging 提交：`83cf49f release(windows): rename product to 南枫下载`。
+- Windows Release 标签提交：`168753e docs: add Windows v2026.07.19 release notes`。
 - 当前源码 Git：根目录正确，分支为 `master`，最新提交是 Android 工作台文档提交；工作区存在尚未提交的 Windows 改动，因此本次不提交、不清理、不重置。
 
 明确排除：
@@ -60,7 +60,7 @@
 | 合成与转码 | 随包 FFmpeg | 音视频合并、图文作品合成、MP3 转换 |
 | YouTube 运行时兼容 | yt-dlp、Node.js、EJS、PO Provider | 公开视频解析兼容；不保证绕过平台风控 |
 
-当前栈为 Python 3.13、PySide6、yt-dlp 2026.7.4、Playwright、FFmpeg、PyInstaller 6.21.0、Node.js、`yt-dlp-ejs` 和 `bgutil-ytdlp-pot-provider`。
+当前栈为 Python 3.13、PySide6、yt-dlp 2026.7.4、Playwright、FFmpeg、PyInstaller 6.21.0、Inno Setup 7 x64（默认，6 仅回退）、Node.js、`yt-dlp-ejs` 和 `bgutil-ytdlp-pot-provider`。
 
 ## 4. 反馈—原因—实现—验证矩阵
 
@@ -184,7 +184,7 @@
 
 - `README.md` 已在 2026-07-18 校准为当前软件内登录、360p、媒体校验、真实回归和 Windows 独立源码流程；早期“简化版原型”和外部浏览器 Cookie 主路径说明已退出当前基准。
 - `docs/nanzhufeng-video-downloader-development-context-for-chatgpt.md` 保存了大量历史过程和旧 `dist` 路径；它可用于理解失败经验，当前发布事实以 `docs/context.md` 和本审计为准。
-- 当前 Git 最新提交是 Android 工作台文档提交，而 Windows 成品主要存在于 dirty 工作区和独立发布 staging；不能以 `master` 最新提交直接重建并宣称等同于已发布 Windows 包。
+- 原始混合仓库仍保留 Android/Mac 历史和 dirty 改动；Windows 重建与发布必须从独立仓库 `D:\CodexProjects\NanfengDownloader-Windows` 执行，不能再从原 `master` 直接发布。
 - 当前根目录同时含 Windows、Mac 和 Android 资料。平台文件可以共存，但测试、构建、交付和真实验证结论必须按平台隔离。
 
 ## 12. 验证等级
