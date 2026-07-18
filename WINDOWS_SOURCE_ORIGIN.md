@@ -1,6 +1,6 @@
 # Windows 独立源码来源
 
-- 生成时间：2026-07-18T23:41:34+08:00
+- 生成时间：2026-07-18T23:46:48+08:00
 - 来源目录：`D:\CodexProjects\江湖工具箱\CleanVideoDownloader`
 - 来源分支：`master`
 - 来源提交：`b1073b830497f5e9dccbc8e3938d9472988c0ad3`
