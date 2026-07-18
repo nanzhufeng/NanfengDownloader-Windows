@@ -11,6 +11,7 @@ venv/
 build/
 dist/
 dist_new/
+installer/
 *.egg-info/
 
 # Local design sessions and generated previews

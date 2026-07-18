@@ -76,7 +76,15 @@ python scripts/export_windows_source.py `
 先通过源码或 `.bat` 验证，再按需执行：
 
 ```powershell
-python -m PyInstaller --noconfirm 南枫下载.spec
+python -m PyInstaller --noconfirm 南枫下载_Windows.spec
 ```
 
-打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、ZIP 和 SHA-256。
+发布到 GitHub 时优先使用 Inno Setup 安装包：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
+```
+
+安装程序输出到 `installer\NanfengDownloader-Windows-v2026.07.19-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
+
+打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。
