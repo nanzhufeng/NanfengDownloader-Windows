@@ -4,6 +4,10 @@
 
 当前技术栈、目录职责、发布状态和接手说明见 [docs/context.md](docs/context.md)；正式开发经验、证据矩阵与回归门槛见 [docs/app-development-experience-audit.md](docs/app-development-experience-audit.md)。
 
+## 界面预览
+
+![南枫下载 Windows 界面预览](docs/assets/nanfeng-downloader-windows-preview.png)
+
 ## 能力边界
 
 - 支持公开内容，以及登录后当前账号本来有权限访问的内容。
