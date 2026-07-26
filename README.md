@@ -1,6 +1,6 @@
 # 南枫下载
 
-面向个人批量工作流的抖音 / YouTube Windows 桌面下载工具。当前正式 Windows 版使用 Python、PySide6、yt-dlp、Playwright 和 FFmpeg。
+面向个人批量工作流的抖音 / YouTube / 哔哩哔哩 / 小红书 Windows 桌面下载工具。当前正式 Windows 版使用 Python、PySide6、yt-dlp、Playwright 和 FFmpeg。
 
 当前技术栈、目录职责、发布状态和接手说明见 [docs/context.md](docs/context.md)；正式开发经验、证据矩阵与回归门槛见 [docs/app-development-experience-audit.md](docs/app-development-experience-audit.md)。
 
@@ -18,7 +18,8 @@
 
 ## 当前功能
 
-- 智能识别抖音 / YouTube 单视频、作者、频道和播放列表链接。
+- 智能识别抖音、YouTube、哔哩哔哩和小红书的单视频及作者/频道/UP 主链接；B站多 P 选集会展开为可勾选的独立队列项。
+- 小红书只把视频笔记加入队列，图文笔记不会伪装成视频；作者页被平台遮蔽时会明确提示软件内登录。
 - 单视频只加入一条；集合链接读取可勾选作品列表。
 - 支持最佳画质、1080p、720p、360p 和仅音频 MP3。
 - 支持每行单独修改分辨率、全选、反选和执行前重新检查勾选。
@@ -58,6 +59,10 @@ python scripts/run_real_download_regression.py `
   --youtube-single "https://www.youtube.com/watch?v=PONo81nwVy4" `
   --douyin-single "<当前可访问的抖音单视频链接>" `
   --douyin-author "<当前可访问的抖音作者链接>" `
+  --bilibili-single "<当前可访问的 B站单视频链接>" `
+  --bilibili-space "<当前可访问的 B站 UP 主空间链接>" `
+  --xiaohongshu-single "<当前可访问的小红书视频笔记链接>" `
+  --xiaohongshu-author "<当前可访问的小红书作者主页链接>" `
   --require-douyin
 ```
 
@@ -91,6 +96,6 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
 
 构建脚本默认使用 Inno Setup 7 x64；仅在 7 未安装时回退到 Inno Setup 6。
 
-安装程序输出到 `installer\NanfengDownloader-Windows-v2026.07.19-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
+安装程序输出到 `installer\NanfengDownloader-Windows-v2026.07.26-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
 
 打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。

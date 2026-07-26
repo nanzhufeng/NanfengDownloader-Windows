@@ -74,6 +74,14 @@ def _ffprobe_executable(ffmpeg_dir: Path | None) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+def _ffmpeg_executable(ffmpeg_dir: Path | None) -> Path | None:
+    if not ffmpeg_dir:
+        return None
+    name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    candidate = ffmpeg_dir / name
+    return candidate if candidate.is_file() else None
+
+
 def validate_media_file(
     path: Path,
     ffmpeg_dir: Path | None = None,
@@ -140,6 +148,41 @@ def validate_media_file(
 
     if not format_name or duration is None or duration <= 0:
         raise InvalidMediaError(f"下载结果缺少有效的媒体格式或时长：{path.name}")
+
+    ffmpeg = _ffmpeg_executable(ffmpeg_dir)
+    if ffmpeg:
+        scan_command = [
+            str(ffmpeg),
+            "-v",
+            "error",
+            "-xerror",
+            "-i",
+            str(path),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            "-f",
+            "null",
+            "NUL" if os.name == "nt" else "/dev/null",
+        ]
+        try:
+            scanned = subprocess.run(
+                scan_command,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_seconds,
+                check=False,
+                creationflags=creationflags,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise InvalidMediaError(f"ffmpeg 无法检查下载结果完整性：{path.name}") from exc
+        if scanned.returncode != 0:
+            detail = scanned.stderr.strip()[:240]
+            raise InvalidMediaError(f"下载结果的数据包不完整：{path.name}。{detail}")
+
     return MediaProbe(
         path=path,
         size=size,

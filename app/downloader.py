@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import parse_qs, urlparse
 
 from .media_validation import (
     MEDIA_FILE_SUFFIXES,
@@ -77,7 +78,11 @@ def split_urls(text: str) -> list[str]:
         handle = line.strip().strip(" @")
         if re.fullmatch(r"[A-Za-z0-9._-]{3,60}", handle) and not re.fullmatch(r"\d{16,22}", handle):
             candidates.append(f"https://www.youtube.com/@{handle}")
-    candidates.extend(f"https://www.douyin.com/video/{item_id}" for item_id in re.findall(r"(?<!\d)(\d{16,22})(?!\d)", text))
+    text_without_urls = re.sub(r"https?://[^\s，。；;]+", " ", text)
+    candidates.extend(
+        f"https://www.douyin.com/video/{item_id}"
+        for item_id in re.findall(r"(?<!\d)(\d{16,22})(?!\d)", text_without_urls)
+    )
     seen: set[str] = set()
     urls: list[str] = []
     for url in candidates:
@@ -94,6 +99,10 @@ def detect_platform(url: str) -> str:
         return "抖音"
     if "youtube.com" in lower or "youtu.be" in lower:
         return "YouTube"
+    if "bilibili.com" in lower or "b23.tv" in lower:
+        return "哔哩哔哩"
+    if "xiaohongshu.com" in lower or "xhslink.com" in lower:
+        return "小红书"
     return "未知"
 
 
@@ -261,6 +270,30 @@ def build_ydl_options(
         ydl_options["cookiefile"] = str(options.cookie_file)
 
     return ydl_options
+
+
+def _apply_bilibili_page_download_options(
+    url: str,
+    ydl_options: dict[str, Any],
+) -> None:
+    """让 B站分 P 队列项只下载当前页，并在文件名前保留稳定页码。"""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if "bilibili.com" not in host or "/video/" not in parsed.path.lower():
+        return
+    page_values = parse_qs(parsed.query).get("p") or []
+    if not page_values or not str(page_values[0]).isdigit():
+        return
+    page_number = int(page_values[0])
+    if page_number <= 0:
+        return
+
+    output_template = Path(str(ydl_options.get("outtmpl") or ""))
+    if output_template.name:
+        ydl_options["outtmpl"] = str(
+            output_template.with_name(f"P{page_number:02d} {output_template.name}")
+        )
+    ydl_options["noplaylist"] = True
 
 
 def _is_fragment_rate_limit_error(exc: Exception) -> bool:
@@ -477,16 +510,20 @@ def download_url(
     这里延迟导入 yt_dlp，方便界面启动时给出清晰的依赖缺失提示。
     """
     from .douyin import download_douyin_url, is_douyin_url
+    from .xiaohongshu import download_xiaohongshu_url, is_xiaohongshu_url
 
     raise_if_cancelled(cancel_callback)
 
     if is_douyin_url(url):
         return download_douyin_url(url, options, progress_callback, cancel_callback)
+    if is_xiaohongshu_url(url):
+        return download_xiaohongshu_url(url, options, progress_callback, cancel_callback)
 
     options.output_dir.mkdir(parents=True, exist_ok=True)
     before = _snapshot_files(options.output_dir)
 
     ydl_options = build_ydl_options(options, progress_callback, cancel_callback)
+    _apply_bilibili_page_download_options(url, ydl_options)
     try:
         for attempt in range(YOUTUBE_PUBLIC_REQUEST_ATTEMPTS):
             try:

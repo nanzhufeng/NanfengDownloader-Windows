@@ -350,6 +350,13 @@ class MainWindow(QMainWindow):
         self.resize(1820, 1130)
         self._build_ui()
         self._apply_style()
+        for login_button in (
+            self.login_douyin_button,
+            self.login_youtube_button,
+            self.login_bilibili_button,
+            self.login_xiaohongshu_button,
+        ):
+            login_button.setFixedWidth(150)
         self._update_cookie_file_state()
         self._update_status()
 
@@ -440,6 +447,22 @@ class MainWindow(QMainWindow):
         self.login_youtube_button.setObjectName("LoginYoutubeButton")
         self.login_youtube_button.setFixedWidth(150)
         self.login_youtube_button.clicked.connect(lambda: self._open_login_window("youtube"))
+        self.login_bilibili_button = QPushButton("登录哔哩哔哩")
+        self.login_bilibili_button.setObjectName("LoginBilibiliButton")
+        self.login_bilibili_button.setFixedWidth(150)
+        self.login_bilibili_button.clicked.connect(lambda: self._open_login_window("bilibili"))
+        self.login_xiaohongshu_button = QPushButton("登录小红书")
+        self.login_xiaohongshu_button.setObjectName("LoginXiaohongshuButton")
+        self.login_xiaohongshu_button.setFixedWidth(150)
+        self.login_xiaohongshu_button.clicked.connect(lambda: self._open_login_window("xiaohongshu"))
+        login_buttons_layout = QHBoxLayout()
+        login_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        login_buttons_layout.setSpacing(12)
+        login_buttons_layout.addWidget(self.login_douyin_button)
+        login_buttons_layout.addWidget(self.login_youtube_button)
+        login_buttons_layout.addWidget(self.login_bilibili_button)
+        login_buttons_layout.addWidget(self.login_xiaohongshu_button)
+        login_buttons_layout.addStretch(1)
 
         output_label = QLabel("保存位置")
         output_label.setObjectName("FieldLabel")
@@ -457,7 +480,9 @@ class MainWindow(QMainWindow):
         url_label = QLabel("链接")
         url_label.setObjectName("FieldLabel")
         self.url_text = QPlainTextEdit()
-        self.url_text.setPlaceholderText("粘贴抖音链接、YouTube 链接，或 YouTube @频道名，可一次多行。")
+        self.url_text.setPlaceholderText(
+            "粘贴抖音、YouTube、哔哩哔哩或小红书链接；支持作者/频道/UP 主主页，可一次多行。"
+        )
         self.url_text.setFixedHeight(112)
 
         self.import_button = QPushButton("智能读取")
@@ -475,8 +500,7 @@ class MainWindow(QMainWindow):
         self.paste_hint.setObjectName("Hint")
 
         input_layout.addWidget(login_label, 0, 0)
-        input_layout.addWidget(self.login_douyin_button, 0, 1)
-        input_layout.addWidget(self.login_youtube_button, 0, 2)
+        input_layout.addLayout(login_buttons_layout, 0, 1, 1, 5)
         input_layout.addWidget(output_label, 1, 0)
         input_layout.addWidget(self.output_edit, 1, 1, 1, 3)
         input_layout.addWidget(self.output_button, 1, 4)
@@ -758,6 +782,13 @@ class MainWindow(QMainWindow):
                 color: #ffffff;
                 font-weight: 700;
             }
+            QPushButton#LoginDouyinButton,
+            QPushButton#LoginYoutubeButton,
+            QPushButton#LoginBilibiliButton,
+            QPushButton#LoginXiaohongshuButton {
+                min-width: 120px;
+                max-width: 120px;
+            }
             QPushButton#LoginDouyinButton {
                 background: #fff1f5;
                 border: 1px solid #ffd2df;
@@ -768,6 +799,18 @@ class MainWindow(QMainWindow):
                 background: #eef3ff;
                 border: 1px solid #d6dfff;
                 color: #3461ff;
+                font-weight: 700;
+            }
+            QPushButton#LoginBilibiliButton {
+                background: #effaff;
+                border: 1px solid #cceef9;
+                color: #1677a8;
+                font-weight: 700;
+            }
+            QPushButton#LoginXiaohongshuButton {
+                background: #fff3f2;
+                border: 1px solid #ffd6d2;
+                color: #e24a4a;
                 font-weight: 700;
             }
             QPushButton#ChooseButton {
@@ -835,6 +878,8 @@ class MainWindow(QMainWindow):
             }
             QPushButton#LoginDouyinButton:disabled,
             QPushButton#LoginYoutubeButton:disabled,
+            QPushButton#LoginBilibiliButton:disabled,
+            QPushButton#LoginXiaohongshuButton:disabled,
             QPushButton#ChooseButton:disabled,
             QPushButton#SmartImportButton:disabled,
             QPushButton#StopButton:disabled,
@@ -885,6 +930,8 @@ class MainWindow(QMainWindow):
         browser_available = find_browser_path() is not None
         self.login_douyin_button.setEnabled(browser_available)
         self.login_youtube_button.setEnabled(browser_available)
+        self.login_bilibili_button.setEnabled(browser_available)
+        self.login_xiaohongshu_button.setEnabled(browser_available)
         self.login_youtube_button.setText(
             "YouTube 已登录" if has_youtube_account_cookies() else "登录 YouTube"
         )
@@ -908,7 +955,12 @@ class MainWindow(QMainWindow):
             detail = "".join(traceback.format_exception_only(type(exc), exc)).strip()
             self._on_login_failed(detail)
             return
-        platform_name = "抖音" if platform == "douyin" else "YouTube"
+        platform_name = {
+            "douyin": "抖音",
+            "youtube": "YouTube",
+            "bilibili": "哔哩哔哩",
+            "xiaohongshu": "小红书",
+        }.get(platform, platform)
         self.status_label.setText(f"已打开独立{platform_name}登录窗口。主软件关闭后，该窗口仍会保留。")
 
     @Slot(str)
@@ -917,7 +969,12 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _on_login_finished(self, platform: str) -> None:
-        platform_name = "抖音" if platform == "douyin" else "YouTube"
+        platform_name = {
+            "douyin": "抖音",
+            "youtube": "YouTube",
+            "bilibili": "哔哩哔哩",
+            "xiaohongshu": "小红书",
+        }.get(platform, platform)
         self.status_label.setText(f"{platform_name}登录窗口已关闭，登录态已保存。")
 
     @Slot(str)
@@ -936,7 +993,11 @@ class MainWindow(QMainWindow):
         urls = split_urls(text if text is not None else self.url_text.toPlainText())
         if not urls:
             if show_message:
-                QMessageBox.information(self, "没有发现链接", "请先粘贴抖音链接、YouTube 链接，或 YouTube @频道名。")
+                QMessageBox.information(
+                    self,
+                    "没有发现链接",
+                    "请先粘贴抖音、YouTube、哔哩哔哩或小红书链接。",
+                )
             return 0
 
         existing = {
@@ -1040,6 +1101,24 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_discovery_failed(self, error: str) -> None:
         self.discovery_had_error = True
+        source = self.discovery_source_text.lower()
+        login_platform: str | None = None
+        login_name = ""
+        if "登录小红书" in error and ("xiaohongshu.com" in source or "xhslink.com" in source):
+            login_platform, login_name = "xiaohongshu", "小红书"
+        elif "登录哔哩哔哩" in error and ("bilibili.com" in source or "b23.tv" in source):
+            login_platform, login_name = "bilibili", "哔哩哔哩"
+        if login_platform:
+            answer = QMessageBox.question(
+                self,
+                "需要平台登录",
+                f"{error[:380]}\n\n是否打开独立的{login_name}登录窗口？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if answer == QMessageBox.Yes:
+                self._open_login_window(login_platform)
+            return
         QMessageBox.warning(self, "读取作品列表失败", error[:500])
 
     @Slot(int)
@@ -1057,11 +1136,13 @@ class MainWindow(QMainWindow):
                 self.status_label.setText("没有读取到可下载作品。")
         elif count >= self.discovery_limit:
             self.status_label.setText(f"已读取 {count} 个作品；可能还有更多，可以点击“加载更多视频”。")
-        elif (
-            count <= 30
-            and "douyin.com" in self.discovery_source_text.lower()
+        elif count <= 30 and any(
+            host in self.discovery_source_text.lower()
+            for host in ("douyin.com", "xiaohongshu.com", "bilibili.com")
         ):
-            self.status_label.setText(f"已读取 {count} 个作品；如需更多，请先点“登录抖音”或“登录 YouTube”后重读。")
+            self.status_label.setText(
+                f"已读取 {count} 个作品；如需更多，请先登录对应平台后重读。"
+            )
         else:
             self.status_label.setText(f"已读取 {count} 个作品，请勾选后开始下载。")
 
@@ -1650,6 +1731,10 @@ class MainWindow(QMainWindow):
             urls.append("https://www.douyin.com/")
         if "YouTube" in platforms:
             urls.append("https://www.youtube.com/generate_204")
+        if "哔哩哔哩" in platforms:
+            urls.append("https://www.bilibili.com/")
+        if "小红书" in platforms:
+            urls.append("https://www.xiaohongshu.com/explore")
         if not urls:
             urls.append("https://www.baidu.com/")
         return urls

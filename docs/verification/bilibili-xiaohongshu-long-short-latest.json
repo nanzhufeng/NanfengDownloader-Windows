@@ -1,0 +1,176 @@
+{
+  "generated_at": "2026-07-26T14:57:44+08:00",
+  "quality": "720p 及以下",
+  "output_dir": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145328",
+  "results": [
+    {
+      "name": "bilibili-short",
+      "platform": "哔哩哔哩",
+      "kind": "短视频",
+      "source_url": "https://www.bilibili.com/video/BV1hAtXefEeJ/",
+      "expected_min": 10,
+      "expected_max": 120,
+      "status": "PASS",
+      "catalog_seconds": 0.999,
+      "catalog": {
+        "title": "阿萨Aza来啦【UP！阿瓦隆之夜】嘉宾官宣",
+        "creator_name": "哔哩哔哩直播",
+        "publish_date": "2024-09-19",
+        "resolved_url": "https://www.bilibili.com/video/BV1hAtXefEeJ/"
+      },
+      "download_seconds": 1.802,
+      "media": {
+        "path": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145328\\BiliBili\\哔哩哔哩直播\\2024-09-19 阿萨Aza来啦【UP！阿瓦隆之夜】嘉宾官宣.mp4",
+        "duration_seconds": 29.483,
+        "size_bytes": 1536626,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "video_streams": [
+          {
+            "index": 0,
+            "codec_name": "hevc",
+            "codec_type": "video",
+            "width": 1280,
+            "height": 720
+          }
+        ],
+        "audio_streams": [
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "validated_size": 1536626,
+        "average_mib_per_second": 0.813
+      },
+      "total_seconds": 3.326
+    },
+    {
+      "name": "bilibili-long",
+      "platform": "哔哩哔哩",
+      "kind": "长视频",
+      "source_url": "https://www.bilibili.com/video/BV1vk4y1z7o3/",
+      "expected_min": 1800,
+      "expected_max": null,
+      "status": "PASS",
+      "catalog_seconds": 0.668,
+      "catalog": {
+        "title": "匠人纪录片：一个长达6万个小时关于人类手工艺生存状况的故事",
+        "creator_name": "三及第粉友-17328",
+        "publish_date": "2020-06-24",
+        "resolved_url": "https://www.bilibili.com/video/BV1vk4y1z7o3/"
+      },
+      "download_seconds": 124.272,
+      "media": {
+        "path": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145328\\BiliBili\\三及第粉友-17328\\2020-06-24 匠人纪录片：一个长达6万个小时关于人类手工艺生存状况的故事.mp4",
+        "duration_seconds": 3780.502,
+        "size_bytes": 984397843,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "video_streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 1920,
+            "height": 708
+          }
+        ],
+        "audio_streams": [
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "validated_size": 984397843,
+        "average_mib_per_second": 7.554
+      },
+      "total_seconds": 125.71
+    },
+    {
+      "name": "xiaohongshu-short",
+      "platform": "小红书",
+      "kind": "短视频",
+      "source_url": "https://xhslink.com/o/1VcNg8JRXBx",
+      "expected_min": 1,
+      "expected_max": 30,
+      "status": "PASS",
+      "catalog_seconds": 2.889,
+      "catalog": {
+        "title": "结算",
+        "creator_name": "爱吃炸串",
+        "publish_date": "2026-01-08",
+        "resolved_url": "https://www.xiaohongshu.com/explore/695f931a00000000220097fa"
+      },
+      "download_seconds": 3.215,
+      "media": {
+        "path": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145328\\Xiaohongshu\\爱吃炸串\\2026-01-08 结算.mp4",
+        "duration_seconds": 6.014,
+        "size_bytes": 498915,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "video_streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 720,
+            "height": 960
+          }
+        ],
+        "audio_streams": [
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "validated_size": 498915,
+        "average_mib_per_second": 0.148
+      },
+      "total_seconds": 6.487
+    },
+    {
+      "name": "xiaohongshu-long",
+      "platform": "小红书",
+      "kind": "长视频",
+      "source_url": "https://xhslink.com/o/3m5iUSykg2x",
+      "expected_min": 90,
+      "expected_max": null,
+      "status": "PASS",
+      "catalog_seconds": 2.943,
+      "catalog": {
+        "title": "✨ 上海金山区社会实践活动 Vlog ✨",
+        "creator_name": "中韩英翻译李恃宪",
+        "publish_date": "2025-09-29",
+        "resolved_url": "https://www.xiaohongshu.com/explore/68dac3350000000011014547"
+      },
+      "download_seconds": 6.376,
+      "media": {
+        "path": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145630\\Xiaohongshu\\中韩英翻译李恃宪\\2025-09-29 ✨ 上海金山区社会实践活动 Vlog ✨.mp4",
+        "duration_seconds": 121.788,
+        "size_bytes": 17975450,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "video_streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 960,
+            "height": 544
+          }
+        ],
+        "audio_streams": [
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "validated_size": 17975450,
+        "average_mib_per_second": 2.689
+      },
+      "total_seconds": 9.73
+    }
+  ],
+  "evidence_note": "四项均为真实下载；小红书长视频项来自续传修复后的独立复测。"
+}

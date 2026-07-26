@@ -216,13 +216,19 @@ def discover_youtube_items(url: str, options: DownloadOptions, max_items: int = 
 
 def discover_links(text: str, options: DownloadOptions, max_items: int = 500) -> list[CatalogItem]:
     """把用户粘贴的作者页、频道、播放列表或单条链接解析成可勾选的视频列表。"""
+    from .bilibili import discover_bilibili_items, is_bilibili_url
     from .douyin import discover_douyin_author_items, is_douyin_url
+    from .xiaohongshu import discover_xiaohongshu_items, is_xiaohongshu_url
 
     discovered: list[CatalogItem] = []
     seen: set[str] = set()
     for url in split_urls(text):
         if is_douyin_url(url):
             items = discover_douyin_author_items(url, options, max_items=max_items)
+        elif is_bilibili_url(url):
+            items = discover_bilibili_items(url, options, max_items=max_items)
+        elif is_xiaohongshu_url(url):
+            items = discover_xiaohongshu_items(url, options, max_items=max_items)
         else:
             items = discover_youtube_items(url, options, max_items=max_items)
 

@@ -1,0 +1,49 @@
+{
+  "generated_at": "2026-07-26T14:56:40+08:00",
+  "quality": "720p 及以下",
+  "output_dir": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145630",
+  "results": [
+    {
+      "name": "xiaohongshu-long",
+      "platform": "小红书",
+      "kind": "长视频",
+      "source_url": "https://xhslink.com/o/3m5iUSykg2x",
+      "expected_min": 90,
+      "expected_max": null,
+      "status": "PASS",
+      "catalog_seconds": 2.943,
+      "catalog": {
+        "title": "✨ 上海金山区社会实践活动 Vlog ✨",
+        "creator_name": "中韩英翻译李恃宪",
+        "publish_date": "2025-09-29",
+        "resolved_url": "https://www.xiaohongshu.com/explore/68dac3350000000011014547"
+      },
+      "download_seconds": 6.376,
+      "media": {
+        "path": "D:\\CodexProjects\\NanfengDownloader-Windows\\.verification-downloads\\bilibili-xiaohongshu-long-short-20260726-145630\\Xiaohongshu\\中韩英翻译李恃宪\\2025-09-29 ✨ 上海金山区社会实践活动 Vlog ✨.mp4",
+        "duration_seconds": 121.788,
+        "size_bytes": 17975450,
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "video_streams": [
+          {
+            "index": 0,
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 960,
+            "height": 544
+          }
+        ],
+        "audio_streams": [
+          {
+            "index": 1,
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "validated_size": 17975450,
+        "average_mib_per_second": 2.689
+      },
+      "total_seconds": 9.73
+    }
+  ]
+}

@@ -56,6 +56,32 @@ class MediaValidationTests(unittest.TestCase):
         self.assertEqual(result.method, "ffprobe")
         self.assertEqual(result.duration, 2.5)
 
+    def test_packet_scan_rejects_truncated_media_even_when_ffprobe_reads_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "truncated.mp4"
+            target.write_bytes(_fake_mp4_bytes())
+            ffmpeg_dir = Path(temp_dir) / "ffmpeg"
+            ffmpeg_dir.mkdir()
+            (ffmpeg_dir / "ffprobe.exe").touch()
+            (ffmpeg_dir / "ffmpeg.exe").touch()
+
+            probe_completed = SimpleNamespace(
+                returncode=0,
+                stdout='{"format":{"format_name":"mov,mp4","duration":"120.0","size":"152"}}',
+                stderr="",
+            )
+            scan_completed = SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="corrupt input packet in stream 0",
+            )
+            with patch(
+                "app.media_validation.subprocess.run",
+                side_effect=[probe_completed, scan_completed],
+            ):
+                with self.assertRaisesRegex(InvalidMediaError, "数据包不完整"):
+                    validate_media_file(target, ffmpeg_dir)
+
     def test_invalid_new_file_is_removed_before_success(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "fake.mp4"
