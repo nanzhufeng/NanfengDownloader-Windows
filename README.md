@@ -8,6 +8,12 @@
 
 ![南枫下载 Windows 界面预览](docs/assets/nanfeng-downloader-windows-preview.png)
 
+## 下载安装
+
+前往 [v2026.08.01.1 正式版](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.01.1-windows) 下载 `NanfengDownloader-Windows-v2026.08.01.1-Setup.exe`。
+
+SHA-256：`662BDFF26DCFD51787C3FE2B8F1E8041D34A87EF97A891D9EB3883A23AC0EF53`。安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
+
 ## 能力边界
 
 - 支持公开内容，以及登录后当前账号本来有权限访问的内容。
