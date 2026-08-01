@@ -20,6 +20,8 @@
 
 - 智能识别抖音、YouTube、哔哩哔哩和小红书的单视频及作者/频道/UP 主链接；B站多 P 选集会展开为可勾选的独立队列项。
 - 小红书只把视频笔记加入队列，图文笔记不会伪装成视频；作者页被平台遮蔽时会明确提示软件内登录。
+- 下载完成后可在对应队列行点击“定位”，直接打开 Windows 资源管理器并选中该任务的准确输出文件。
+- 链接输入区提供独立“清空链接”按钮，只清空输入内容，不影响已经读取的下载队列。
 - 单视频只加入一条；集合链接读取可勾选作品列表。
 - 支持最佳画质、1080p、720p、360p 和仅音频 MP3。
 - 支持每行单独修改分辨率、全选、反选和执行前重新检查勾选。
@@ -96,6 +98,6 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
 
 构建脚本默认使用 Inno Setup 7 x64；仅在 7 未安装时回退到 Inno Setup 6。
 
-安装程序输出到 `installer\NanfengDownloader-Windows-v2026.07.26-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
+安装程序输出到 `installer\NanfengDownloader-Windows-v2026.08.01-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
 
 打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。

@@ -78,11 +78,39 @@ class PlatformLoginLayoutTests(unittest.TestCase):
             self.assertEqual([button.width() for button in buttons], [150, 150, 150, 150])
             self.assertEqual(len({button.geometry().y() for button in buttons}), 1)
             self.assertEqual(window.output_edit.width(), window.url_text.width())
+            self.assertEqual(window.clear_url_button.geometry().x(), window.import_button.geometry().x())
+            self.assertGreater(window.clear_url_button.geometry().y(), window.import_button.geometry().y())
+            self.assertEqual(window.clear_url_button.width(), window.import_button.width())
             self.assertGreater(
                 window.output_edit.width(),
                 window.import_button.width() * 3,
                 "新增登录按钮不得压缩保存位置和链接输入区域",
             )
+        finally:
+            window.close()
+            app.processEvents()
+
+    def test_clear_link_button_only_clears_the_input_box(self) -> None:
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication
+
+        from app.main import MainWindow
+
+        app = QApplication.instance() or QApplication([])
+        window = MainWindow()
+        try:
+            window.url_text.setPlainText("https://example.test/video")
+            window._add_queue_row(
+                url="https://example.test/queued-video",
+                platform="测试平台",
+                title="队列视频",
+            )
+
+            window.clear_url_button.click()
+
+            self.assertEqual(window.url_text.toPlainText(), "")
+            self.assertEqual(window.table.rowCount(), 1)
+            self.assertEqual(window.status_label.text(), "链接输入框已清空。")
         finally:
             window.close()
             app.processEvents()

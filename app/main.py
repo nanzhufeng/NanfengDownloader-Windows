@@ -54,6 +54,7 @@ from .downloader import (
     split_urls,
 )
 from .media_validation import MEDIA_FILE_SUFFIXES, is_probable_existing_media
+from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
@@ -69,6 +70,7 @@ COL_PROGRESS = 7
 COL_SPEED = 8
 COL_ETA = 9
 COL_LINK = 10
+COL_LOCATE = 11
 FULL_TEXT_TOOLTIP_COLUMNS = {COL_CREATOR, COL_TITLE, COL_LINK}
 
 
@@ -191,8 +193,8 @@ class DownloadWorker(QObject):
     should_download_row = Signal(int)
     item_started = Signal(int)
     item_progress = Signal(int, dict)
-    item_finished = Signal(int, str)
-    item_skipped = Signal(int, str)
+    item_finished = Signal(int, str, object)
+    item_skipped = Signal(int, str, object)
     item_failed = Signal(int, str)
     item_stopped = Signal(int)
     all_done = Signal()
@@ -232,10 +234,10 @@ class DownloadWorker(QObject):
             else:
                 if result.skipped:
                     display_name = result.message or "文件已存在，已跳过下载"
-                    self.item_skipped.emit(item.row, display_name)
+                    self.item_skipped.emit(item.row, display_name, [str(path) for path in result.files])
                     continue
                 display_name = result.files[0].name if result.files else "下载完成"
-                self.item_finished.emit(item.row, display_name)
+                self.item_finished.emit(item.row, display_name, [str(path) for path in result.files])
         self.all_done.emit()
 
     def cancel(self) -> None:
@@ -340,6 +342,7 @@ class MainWindow(QMainWindow):
         self.check_drag_active = False
         self.check_drag_state = Qt.Unchecked
         self.check_drag_rows: set[int] = set()
+        self.row_output_files: dict[int, list[Path]] = {}
         self.download_started_at: float | None = None
         self.network_check_timer = QTimer(self)
         self.network_check_timer.setInterval(8000)
@@ -488,6 +491,9 @@ class MainWindow(QMainWindow):
         self.import_button = QPushButton("智能读取")
         self.import_button.setObjectName("SmartImportButton")
         self.import_button.clicked.connect(self._smart_import)
+        self.clear_url_button = QPushButton("清空链接")
+        self.clear_url_button.setObjectName("ClearUrlButton")
+        self.clear_url_button.clicked.connect(self._clear_url_input)
         url_button_panel = QFrame()
         url_button_panel.setObjectName("UrlButtonPanel")
         url_button_layout = QVBoxLayout(url_button_panel)
@@ -495,6 +501,7 @@ class MainWindow(QMainWindow):
         url_button_layout.setSpacing(10)
         url_button_layout.addStretch(1)
         url_button_layout.addWidget(self.import_button)
+        url_button_layout.addWidget(self.clear_url_button)
         url_button_layout.addStretch(1)
         self.paste_hint = QLabel("支持公开内容和登录后有权限访问的所有内容。")
         self.paste_hint.setObjectName("Hint")
@@ -544,8 +551,8 @@ class MainWindow(QMainWindow):
         action_layout.addStretch(1)
         layout.addWidget(action_frame)
 
-        self.table = QTableWidget(0, 11)
-        self.table.setHorizontalHeaderLabels(["序号", "选择", "状态", "平台", "博主", "分辨率", "标题 / 文件", "进度", "速度", "剩余", "链接"])
+        self.table = QTableWidget(0, 12)
+        self.table.setHorizontalHeaderLabels(["序号", "选择", "状态", "平台", "博主", "分辨率", "标题 / 文件", "进度", "速度", "剩余", "链接", "定位"])
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
@@ -574,6 +581,8 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(COL_ETA, QHeaderView.Fixed)
         self.table.setColumnWidth(COL_ETA, 96)
         header.setSectionResizeMode(COL_LINK, QHeaderView.Stretch)
+        header.setSectionResizeMode(COL_LOCATE, QHeaderView.Fixed)
+        self.table.setColumnWidth(COL_LOCATE, 76)
         layout.addWidget(self.table, 1)
 
         bottom_bar = QHBoxLayout()
@@ -825,6 +834,12 @@ class MainWindow(QMainWindow):
                 color: #c15f0a;
                 font-weight: 700;
             }
+            QPushButton#ClearUrlButton {
+                background: #fff1f3;
+                border: 1px solid #ffcdd6;
+                color: #d92d50;
+                font-weight: 700;
+            }
             QPushButton#StopButton {
                 background: #fff1f3;
                 border: 1px solid #ffcdd6;
@@ -855,6 +870,20 @@ class MainWindow(QMainWindow):
                 color: #3461ff;
                 font-weight: 700;
                 min-width: 118px;
+            }
+            QPushButton#LocateButton {
+                background: #eefbf6;
+                border: 1px solid #c8f0df;
+                color: #138a5e;
+                font-weight: 700;
+                min-width: 52px;
+                max-width: 52px;
+                padding: 5px 6px;
+            }
+            QPushButton#LocateButton:disabled {
+                color: #a2abbb;
+                background: #f3f5f9;
+                border: 1px solid #e3e8f1;
             }
             QComboBox#TableCombo {
                 min-width: 104px;
@@ -989,6 +1018,11 @@ class MainWindow(QMainWindow):
     def _smart_import(self) -> None:
         self._start_discovery(fallback_to_queue=True)
 
+    def _clear_url_input(self) -> None:
+        self.url_text.clear()
+        self.url_text.setFocus()
+        self.status_label.setText("链接输入框已清空。")
+
     def _add_urls(self, text: str | None = None, show_message: bool = True) -> int:
         urls = split_urls(text if text is not None else self.url_text.toPlainText())
         if not urls:
@@ -1085,6 +1119,7 @@ class MainWindow(QMainWindow):
         self._set_cell(row, COL_SPEED, "-")
         self._set_cell(row, COL_ETA, "-")
         self._set_cell(row, COL_LINK, url)
+        self._set_locate_cell(row)
         return True
 
     @Slot(object)
@@ -1267,6 +1302,50 @@ class MainWindow(QMainWindow):
         combo.setObjectName("TableCombo")
         self.table.setCellWidget(row, COL_QUALITY, combo)
 
+    def _set_locate_cell(self, row: int) -> None:
+        button = QPushButton("定位")
+        button.setObjectName("LocateButton")
+        button.setEnabled(False)
+        button.setToolTip("下载完成后可在资源管理器中选中对应文件")
+        button.clicked.connect(lambda _checked=False, target_row=row: self._reveal_row_output(target_row))
+        self.table.setCellWidget(row, COL_LOCATE, button)
+
+    def _set_row_output_files(self, row: int, files: object) -> None:
+        paths = [Path(str(path)).expanduser().resolve() for path in (files or [])]
+        existing_paths = [path for path in paths if path.is_file()]
+        self.row_output_files[row] = existing_paths
+        button = self.table.cellWidget(row, COL_LOCATE)
+        if not isinstance(button, QPushButton):
+            return
+        button.setEnabled(bool(existing_paths))
+        if not existing_paths:
+            button.setToolTip("当前任务没有可定位的输出文件")
+        elif len(existing_paths) == 1:
+            button.setToolTip(f"打开目录并选中：{existing_paths[0].name}")
+        else:
+            button.setToolTip(f"该任务生成 {len(existing_paths)} 个文件；点击定位首个文件")
+
+    def _reveal_row_output(self, row: int) -> None:
+        paths = self.row_output_files.get(row, [])
+        if not paths:
+            QMessageBox.information(self, "无法定位文件", "该任务尚未记录准确的输出文件路径。")
+            return
+        file_path = paths[0]
+        if not file_path.is_file():
+            self._set_row_output_files(row, [])
+            QMessageBox.warning(self, "文件不存在", f"文件可能已被移动或删除：\n{file_path}")
+            return
+        try:
+            selected_path = reveal_file_in_explorer(file_path)
+        except OSError as exc:
+            QMessageBox.warning(self, "打开保存目录失败", str(exc))
+            return
+        self.table.setCurrentCell(row, COL_LOCATE)
+        if len(paths) > 1:
+            self.status_label.setText(f"该任务有 {len(paths)} 个输出文件，已选中首个：{selected_path.name}")
+        else:
+            self.status_label.setText(f"已在资源管理器中选中：{selected_path.name}")
+
     @Slot(QTableWidgetItem)
     def _on_table_item_clicked(self, item: QTableWidgetItem) -> None:
         if item.column() == COL_TITLE:
@@ -1327,17 +1406,18 @@ class MainWindow(QMainWindow):
 
         skipped = 0
         for row in rows:
-            if not self._row_matches_existing_file(row, existing):
+            existing_path = self._row_existing_file(row, existing)
+            if not existing_path:
                 continue
-            self._on_item_skipped(row, "保存目录中已存在对应文件，已跳过下载。")
+            self._on_item_skipped(row, "保存目录中已存在对应文件，已跳过下载。", [existing_path])
             skipped += 1
         return skipped
 
-    def _existing_media_index(self, output_dir: Path) -> set[tuple[str, str]]:
+    def _existing_media_index(self, output_dir: Path) -> dict[tuple[str, str], Path]:
         if not output_dir.exists():
-            return set()
+            return {}
 
-        index: set[tuple[str, str]] = set()
+        index: dict[tuple[str, str], Path] = {}
         for file_path in output_dir.rglob("*"):
             if not file_path.is_file() or file_path.suffix.lower() not in MEDIA_FILE_SUFFIXES:
                 continue
@@ -1348,23 +1428,23 @@ class MainWindow(QMainWindow):
             if not stem_key:
                 continue
             creator_key = self._normalize_existing_lookup_text(file_path.parent.name)
-            index.add((creator_key, stem_key))
-            index.add(("", stem_key))
+            index.setdefault((creator_key, stem_key), file_path.resolve())
+            index.setdefault(("", stem_key), file_path.resolve())
         return index
 
-    def _row_matches_existing_file(self, row: int, existing: set[tuple[str, str]]) -> bool:
+    def _row_existing_file(self, row: int, existing: dict[tuple[str, str], Path]) -> Path | None:
         title_item = self.table.item(row, COL_TITLE)
         if not title_item:
-            return False
+            return None
         title_key = self._normalize_existing_lookup_text(title_item.text())
         if not title_key:
-            return False
+            return None
 
         creator = self._row_creator_name(row)
         creator_key = self._normalize_existing_lookup_text(safe_path_name(creator)) if creator else ""
         if creator_key:
-            return (creator_key, title_key) in existing
-        return ("", title_key) in existing
+            return existing.get((creator_key, title_key))
+        return existing.get(("", title_key))
 
     def _normalize_existing_lookup_text(self, text: str | None) -> str:
         cleaned = text or ""
@@ -1494,6 +1574,7 @@ class MainWindow(QMainWindow):
 
     def _clear_queue(self) -> None:
         self.table.setRowCount(0)
+        self.row_output_files.clear()
         self.main_progress.setValue(0)
         self.download_started_at = None
         self.waiting_for_network = False
@@ -1518,6 +1599,7 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_item_started(self, row: int) -> None:
+        self._set_row_output_files(row, [])
         self._set_row_status(row, "下载中")
         self._set_cell(row, COL_PROGRESS, "0%")
 
@@ -1541,20 +1623,22 @@ class MainWindow(QMainWindow):
 
         self._update_main_progress()
 
-    @Slot(int, str)
-    def _on_item_finished(self, row: int, file_name: str) -> None:
+    @Slot(int, str, object)
+    def _on_item_finished(self, row: int, file_name: str, files: object) -> None:
         self._set_row_status(row, "完成")
         self._set_cell(row, COL_TITLE, file_name)
         self._set_cell(row, COL_PROGRESS, "100%")
+        self._set_row_output_files(row, files)
         self._update_main_progress()
 
-    @Slot(int, str)
-    def _on_item_skipped(self, row: int, message: str) -> None:
+    @Slot(int, str, object)
+    def _on_item_skipped(self, row: int, message: str, files: object = None) -> None:
         self._set_row_status(row, "已跳过")
         self._set_cell(row, COL_TITLE, message)
         self._set_cell(row, COL_PROGRESS, "100%")
         self._set_cell(row, COL_SPEED, "-")
         self._set_cell(row, COL_ETA, "-")
+        self._set_row_output_files(row, files)
         self._update_main_progress()
 
     @Slot(int, str)
