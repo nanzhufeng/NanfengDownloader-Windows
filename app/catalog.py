@@ -219,6 +219,7 @@ def discover_links(text: str, options: DownloadOptions, max_items: int = 500) ->
     from .bilibili import discover_bilibili_items, is_bilibili_url
     from .douyin import discover_douyin_author_items, is_douyin_url
     from .xiaohongshu import discover_xiaohongshu_items, is_xiaohongshu_url
+    from .tiktok import discover_tiktok_items, is_tiktok_url
 
     discovered: list[CatalogItem] = []
     seen: set[str] = set()
@@ -229,6 +230,8 @@ def discover_links(text: str, options: DownloadOptions, max_items: int = 500) ->
             items = discover_bilibili_items(url, options, max_items=max_items)
         elif is_xiaohongshu_url(url):
             items = discover_xiaohongshu_items(url, options, max_items=max_items)
+        elif is_tiktok_url(url):
+            items = discover_tiktok_items(url, options, max_items=max_items)
         else:
             items = discover_youtube_items(url, options, max_items=max_items)
 

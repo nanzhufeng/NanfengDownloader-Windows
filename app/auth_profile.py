@@ -12,7 +12,7 @@ from typing import Any
 AUTH_COOKIE_MODE = "软件内登录"
 AUTH_DATA_DIRECTORY_NAME = "NanfengDownloader"
 LEGACY_AUTH_DATA_DIRECTORY_NAME = "NanzhufengVideoDownloader"
-SUPPORTED_LOGIN_PLATFORMS = {"douyin", "youtube", "bilibili", "xiaohongshu"}
+SUPPORTED_LOGIN_PLATFORMS = {"douyin", "youtube", "bilibili", "xiaohongshu", "tiktok"}
 YOUTUBE_ACCOUNT_COOKIE_NAMES = {
     "SID",
     "HSID",
@@ -178,6 +178,7 @@ def open_login_browser(platform: str) -> None:
         "youtube": "https://www.youtube.com/",
         "bilibili": "https://www.bilibili.com/",
         "xiaohongshu": "https://www.xiaohongshu.com/explore",
+        "tiktok": "https://www.tiktok.com/",
     }.get(platform)
     if not platform_url:
         raise RuntimeError("未知的登录平台。")
@@ -281,6 +282,7 @@ def _load_browser_cookies() -> list[dict[str, Any]]:
                 "https://www.bilibili.com/",
                 "https://space.bilibili.com/",
                 "https://www.xiaohongshu.com/",
+                "https://www.tiktok.com/",
             ]
         )
         context.close()

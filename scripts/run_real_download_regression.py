@@ -133,6 +133,8 @@ def main() -> int:
     parser.add_argument("--bilibili-space")
     parser.add_argument("--xiaohongshu-single")
     parser.add_argument("--xiaohongshu-author")
+    parser.add_argument("--tiktok-single")
+    parser.add_argument("--tiktok-author")
     parser.add_argument("--quality", default="360p 及以下")
     parser.add_argument("--max-items", type=int, default=25)
     parser.add_argument("--catalog-only", action="store_true")
@@ -166,6 +168,8 @@ def main() -> int:
         _case("bilibili-space", "哔哩哔哩", args.bilibili_space, "creator"),
         _case("xiaohongshu-single", "小红书", args.xiaohongshu_single, "single"),
         _case("xiaohongshu-author", "小红书", args.xiaohongshu_author, "creator"),
+        _case("tiktok-single", "TikTok", args.tiktok_single, "single"),
+        _case("tiktok-author", "TikTok", args.tiktok_author, "creator"),
     ]
     results = [
         _run_case(case, options, max_items=args.max_items, catalog_only=args.catalog_only)

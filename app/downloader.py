@@ -103,6 +103,8 @@ def detect_platform(url: str) -> str:
         return "哔哩哔哩"
     if "xiaohongshu.com" in lower or "xhslink.com" in lower:
         return "小红书"
+    if "tiktok.com" in lower:
+        return "TikTok"
     return "未知"
 
 

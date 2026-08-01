@@ -1,6 +1,6 @@
 # 南枫下载
 
-面向个人批量工作流的抖音 / YouTube / 哔哩哔哩 / 小红书 Windows 桌面下载工具。当前正式 Windows 版使用 Python、PySide6、yt-dlp、Playwright 和 FFmpeg。
+面向个人批量工作流的抖音 / YouTube / 哔哩哔哩 / 小红书 / TikTok Windows 桌面下载工具。当前源码使用 Python、PySide6、yt-dlp、Playwright 和 FFmpeg。
 
 当前技术栈、目录职责、发布状态和接手说明见 [docs/context.md](docs/context.md)；正式开发经验、证据矩阵与回归门槛见 [docs/app-development-experience-audit.md](docs/app-development-experience-audit.md)。
 
@@ -18,7 +18,8 @@
 
 ## 当前功能
 
-- 智能识别抖音、YouTube、哔哩哔哩和小红书的单视频及作者/频道/UP 主链接；B站多 P 选集会展开为可勾选的独立队列项。
+- 智能识别抖音、YouTube、哔哩哔哩、小红书和 TikTok 的单视频及作者/频道/UP 主链接；支持包含短链的 Mac/移动端抖音分享文本，B站多 P 选集会展开为可勾选的独立队列项。
+- TikTok 支持单视频、分享文本和作者主页，使用独立软件内登录资料，列表只保留目标作者作品。
 - 小红书只把视频笔记加入队列，图文笔记不会伪装成视频；作者页被平台遮蔽时会明确提示软件内登录。
 - 下载完成后可在对应队列行点击“定位”，直接打开 Windows 资源管理器并选中该任务的准确输出文件。
 - 链接输入区提供独立“清空链接”按钮，只清空输入内容，不影响已经读取的下载队列。
@@ -65,6 +66,8 @@ python scripts/run_real_download_regression.py `
   --bilibili-space "<当前可访问的 B站 UP 主空间链接>" `
   --xiaohongshu-single "<当前可访问的小红书视频笔记链接>" `
   --xiaohongshu-author "<当前可访问的小红书作者主页链接>" `
+  --tiktok-single "<当前可访问的 TikTok 单视频链接>" `
+  --tiktok-author "<当前可访问的 TikTok 作者主页链接>" `
   --require-douyin
 ```
 
@@ -98,6 +101,6 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
 
 构建脚本默认使用 Inno Setup 7 x64；仅在 7 未安装时回退到 Inno Setup 6。
 
-安装程序输出到 `installer\NanfengDownloader-Windows-v2026.08.01-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
+安装程序输出到 `installer\NanfengDownloader-Windows-v2026.08.01.1-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
 
 打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。

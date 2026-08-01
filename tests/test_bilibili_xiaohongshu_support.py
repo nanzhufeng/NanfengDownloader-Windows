@@ -53,7 +53,7 @@ class PlatformInputTests(unittest.TestCase):
 
 
 class PlatformLoginLayoutTests(unittest.TestCase):
-    def test_four_platform_login_buttons_keep_the_original_row_width(self) -> None:
+    def test_platform_login_buttons_keep_the_original_row_width(self) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
 
@@ -70,12 +70,13 @@ class PlatformLoginLayoutTests(unittest.TestCase):
                 window.login_youtube_button,
                 window.login_bilibili_button,
                 window.login_xiaohongshu_button,
+                window.login_tiktok_button,
             ]
             self.assertEqual(
                 [button.text() for button in buttons],
-                ["登录抖音", "登录 YouTube", "登录哔哩哔哩", "登录小红书"],
+                ["登录抖音", "登录 YouTube", "登录哔哩哔哩", "登录小红书", "登录 TikTok"],
             )
-            self.assertEqual([button.width() for button in buttons], [150, 150, 150, 150])
+            self.assertEqual([button.width() for button in buttons], [150, 150, 150, 150, 150])
             self.assertEqual(len({button.geometry().y() for button in buttons}), 1)
             self.assertEqual(window.output_edit.width(), window.url_text.width())
             self.assertEqual(window.clear_url_button.geometry().x(), window.import_button.geometry().x())

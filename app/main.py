@@ -9,8 +9,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QRect, Qt, QThread, QTimer, Signal, Slot, QSemaphore
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QThread, QTimer, Signal, Slot, QSemaphore
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -358,10 +358,47 @@ class MainWindow(QMainWindow):
             self.login_youtube_button,
             self.login_bilibili_button,
             self.login_xiaohongshu_button,
+            self.login_tiktok_button,
         ):
             login_button.setFixedWidth(150)
         self._update_cookie_file_state()
         self._update_status()
+
+    def _create_platform_card(
+        self,
+        object_name: str,
+        icon_name: str,
+        title_text: str,
+        subtitle_text: str,
+    ) -> QFrame:
+        card = QFrame()
+        card.setObjectName(object_name)
+        card.setFixedHeight(54)
+
+        card_layout = QHBoxLayout(card)
+        card_layout.setContentsMargins(10, 7, 10, 7)
+        card_layout.setSpacing(10)
+
+        icon_label = QLabel()
+        icon_label.setObjectName("PlatformCardIcon")
+        icon_label.setFixedSize(27, 27)
+        icon_path = self.project_root / "app" / "assets" / "platforms" / icon_name
+        pixmap = QPixmap(str(icon_path))
+        icon_label.setPixmap(pixmap.scaled(25, 25, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        icon_label.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(icon_label)
+
+        text_layout = QVBoxLayout()
+        text_layout.setContentsMargins(0, 0, 0, 0)
+        text_layout.setSpacing(1)
+        title_label = QLabel(title_text)
+        title_label.setObjectName("PlatformCardTitle")
+        subtitle_label = QLabel(subtitle_text)
+        subtitle_label.setObjectName("PlatformCardSubtitle")
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(subtitle_label)
+        card_layout.addLayout(text_layout, 1)
+        return card
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -390,13 +427,24 @@ class MainWindow(QMainWindow):
 
         platform_title = QLabel("支持平台")
         platform_title.setObjectName("SideSectionTitle")
-        platform_douyin = QLabel("抖音\n作者 / 作品")
-        platform_douyin.setObjectName("PlatformDouyin")
-        platform_youtube = QLabel("YouTube\n频道 / 播放列表")
-        platform_youtube.setObjectName("PlatformYoutube")
         sidebar_layout.addWidget(platform_title)
-        sidebar_layout.addWidget(platform_douyin)
-        sidebar_layout.addWidget(platform_youtube)
+
+        platform_cards_layout = QVBoxLayout()
+        platform_cards_layout.setContentsMargins(0, 0, 0, 0)
+        platform_cards_layout.setSpacing(8)
+        platform_specs = [
+            ("PlatformDouyin", "douyin.svg", "抖音", "作者 / 作品"),
+            ("PlatformYoutube", "youtube.svg", "YouTube", "频道 / 播放列表"),
+            ("PlatformBilibili", "bilibili.svg", "哔哩哔哩", "UP主 / 视频"),
+            ("PlatformXiaohongshu", "xiaohongshu.svg", "小红书", "作者 / 视频笔记"),
+            ("PlatformTiktok", "tiktok.svg", "TikTok", "作者 / 作品"),
+        ]
+        self.platform_cards = []
+        for object_name, icon_name, title_text, subtitle_text in platform_specs:
+            card = self._create_platform_card(object_name, icon_name, title_text, subtitle_text)
+            self.platform_cards.append(card)
+            platform_cards_layout.addWidget(card)
+        sidebar_layout.addLayout(platform_cards_layout)
         sidebar_layout.addSpacing(8)
 
         workflow_title = QLabel("操作流程")
@@ -458,6 +506,21 @@ class MainWindow(QMainWindow):
         self.login_xiaohongshu_button.setObjectName("LoginXiaohongshuButton")
         self.login_xiaohongshu_button.setFixedWidth(150)
         self.login_xiaohongshu_button.clicked.connect(lambda: self._open_login_window("xiaohongshu"))
+        self.login_tiktok_button = QPushButton("登录 TikTok")
+        self.login_tiktok_button.setObjectName("LoginTikTokButton")
+        self.login_tiktok_button.setFixedWidth(150)
+        self.login_tiktok_button.clicked.connect(lambda: self._open_login_window("tiktok"))
+        login_icon_specs = [
+            (self.login_douyin_button, "douyin.svg"),
+            (self.login_youtube_button, "youtube.svg"),
+            (self.login_bilibili_button, "bilibili.svg"),
+            (self.login_xiaohongshu_button, "xiaohongshu.svg"),
+            (self.login_tiktok_button, "tiktok.svg"),
+        ]
+        for button, icon_name in login_icon_specs:
+            icon_path = self.project_root / "app" / "assets" / "platforms" / icon_name
+            button.setIcon(QIcon(str(icon_path)))
+            button.setIconSize(QSize(18, 18))
         login_buttons_layout = QHBoxLayout()
         login_buttons_layout.setContentsMargins(0, 0, 0, 0)
         login_buttons_layout.setSpacing(12)
@@ -465,6 +528,7 @@ class MainWindow(QMainWindow):
         login_buttons_layout.addWidget(self.login_youtube_button)
         login_buttons_layout.addWidget(self.login_bilibili_button)
         login_buttons_layout.addWidget(self.login_xiaohongshu_button)
+        login_buttons_layout.addWidget(self.login_tiktok_button)
         login_buttons_layout.addStretch(1)
 
         output_label = QLabel("保存位置")
@@ -484,7 +548,7 @@ class MainWindow(QMainWindow):
         url_label.setObjectName("FieldLabel")
         self.url_text = QPlainTextEdit()
         self.url_text.setPlaceholderText(
-            "粘贴抖音、YouTube、哔哩哔哩或小红书链接；支持作者/频道/UP 主主页，可一次多行。"
+            "粘贴抖音、YouTube、哔哩哔哩、小红书或 TikTok 链接；支持作者/频道/UP 主主页，可一次多行。"
         )
         self.url_text.setFixedHeight(112)
 
@@ -503,7 +567,9 @@ class MainWindow(QMainWindow):
         url_button_layout.addWidget(self.import_button)
         url_button_layout.addWidget(self.clear_url_button)
         url_button_layout.addStretch(1)
-        self.paste_hint = QLabel("支持公开内容和登录后有权限访问的所有内容。")
+        self.paste_hint = QLabel(
+            "公开单条视频通常无需登录；读取作者、频道或UP主的批量列表，以及访问受限内容时，平台可能要求登录。"
+        )
         self.paste_hint.setObjectName("Hint")
 
         input_layout.addWidget(login_label, 0, 0)
@@ -692,21 +758,49 @@ class MainWindow(QMainWindow):
                 font-weight: 700;
                 padding: 4px 2px;
             }
-            QLabel#PlatformDouyin, QLabel#PlatformYoutube {
+            QFrame#PlatformDouyin,
+            QFrame#PlatformYoutube,
+            QFrame#PlatformBilibili,
+            QFrame#PlatformXiaohongshu,
+            QFrame#PlatformTiktok {
                 border-radius: 8px;
-                padding: 12px;
-                font-weight: 800;
-                line-height: 150%;
             }
-            QLabel#PlatformDouyin {
+            QLabel#PlatformCardIcon,
+            QLabel#PlatformCardTitle,
+            QLabel#PlatformCardSubtitle {
+                background: transparent;
+                border: none;
+                padding: 0;
+            }
+            QLabel#PlatformCardTitle {
+                color: #1f2937;
+                font-size: 12px;
+                font-weight: 800;
+            }
+            QLabel#PlatformCardSubtitle {
+                color: #7c879c;
+                font-size: 10px;
+                font-weight: 600;
+            }
+            QFrame#PlatformDouyin {
                 background: #fff1f5;
-                color: #dc3d65;
                 border: 1px solid #ffd2df;
             }
-            QLabel#PlatformYoutube {
+            QFrame#PlatformYoutube {
                 background: #eef3ff;
-                color: #3461ff;
                 border: 1px solid #d6dfff;
+            }
+            QFrame#PlatformBilibili {
+                background: #effaff;
+                border: 1px solid #cceef9;
+            }
+            QFrame#PlatformXiaohongshu {
+                background: #fff3f2;
+                border: 1px solid #ffd8d4;
+            }
+            QFrame#PlatformTiktok {
+                background: #f5f2ff;
+                border: 1px solid #e1d8ff;
             }
             QLabel#WorkflowStep {
                 background: #f8faff;
@@ -794,7 +888,8 @@ class MainWindow(QMainWindow):
             QPushButton#LoginDouyinButton,
             QPushButton#LoginYoutubeButton,
             QPushButton#LoginBilibiliButton,
-            QPushButton#LoginXiaohongshuButton {
+            QPushButton#LoginXiaohongshuButton,
+            QPushButton#LoginTikTokButton {
                 min-width: 120px;
                 max-width: 120px;
             }
@@ -820,6 +915,12 @@ class MainWindow(QMainWindow):
                 background: #fff3f2;
                 border: 1px solid #ffd6d2;
                 color: #e24a4a;
+                font-weight: 700;
+            }
+            QPushButton#LoginTikTokButton {
+                background: #f5f0ff;
+                border: 1px solid #dfd2ff;
+                color: #6d46c7;
                 font-weight: 700;
             }
             QPushButton#ChooseButton {
@@ -909,6 +1010,7 @@ class MainWindow(QMainWindow):
             QPushButton#LoginYoutubeButton:disabled,
             QPushButton#LoginBilibiliButton:disabled,
             QPushButton#LoginXiaohongshuButton:disabled,
+            QPushButton#LoginTikTokButton:disabled,
             QPushButton#ChooseButton:disabled,
             QPushButton#SmartImportButton:disabled,
             QPushButton#StopButton:disabled,
@@ -961,6 +1063,7 @@ class MainWindow(QMainWindow):
         self.login_youtube_button.setEnabled(browser_available)
         self.login_bilibili_button.setEnabled(browser_available)
         self.login_xiaohongshu_button.setEnabled(browser_available)
+        self.login_tiktok_button.setEnabled(browser_available)
         self.login_youtube_button.setText(
             "YouTube 已登录" if has_youtube_account_cookies() else "登录 YouTube"
         )
@@ -989,6 +1092,7 @@ class MainWindow(QMainWindow):
             "youtube": "YouTube",
             "bilibili": "哔哩哔哩",
             "xiaohongshu": "小红书",
+            "tiktok": "TikTok",
         }.get(platform, platform)
         self.status_label.setText(f"已打开独立{platform_name}登录窗口。主软件关闭后，该窗口仍会保留。")
 
@@ -1003,6 +1107,7 @@ class MainWindow(QMainWindow):
             "youtube": "YouTube",
             "bilibili": "哔哩哔哩",
             "xiaohongshu": "小红书",
+            "tiktok": "TikTok",
         }.get(platform, platform)
         self.status_label.setText(f"{platform_name}登录窗口已关闭，登录态已保存。")
 
@@ -1030,7 +1135,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self,
                     "没有发现链接",
-                    "请先粘贴抖音、YouTube、哔哩哔哩或小红书链接。",
+                    "请先粘贴抖音、YouTube、哔哩哔哩、小红书或 TikTok 链接。",
                 )
             return 0
 
@@ -1058,7 +1163,11 @@ class MainWindow(QMainWindow):
             self.discovery_limit = 500
         text = self.discovery_source_text if load_more and self.discovery_source_text else self.url_text.toPlainText().strip()
         if not split_urls(text):
-            QMessageBox.information(self, "没有发现链接", "请先粘贴抖音作者页、作品页、YouTube 频道链接、播放列表链接，或 YouTube @频道名。")
+            QMessageBox.information(
+                self,
+                "没有发现链接",
+                "请先粘贴抖音/TikTok 作者或作品链接、YouTube 频道或播放列表、B站 UP 主或小红书链接。",
+            )
             return
 
         options = self._build_options()
@@ -1143,6 +1252,8 @@ class MainWindow(QMainWindow):
             login_platform, login_name = "xiaohongshu", "小红书"
         elif "登录哔哩哔哩" in error and ("bilibili.com" in source or "b23.tv" in source):
             login_platform, login_name = "bilibili", "哔哩哔哩"
+        elif "登录 tiktok" in error.lower() and "tiktok.com" in source:
+            login_platform, login_name = "tiktok", "TikTok"
         if login_platform:
             answer = QMessageBox.question(
                 self,
@@ -1173,7 +1284,7 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"已读取 {count} 个作品；可能还有更多，可以点击“加载更多视频”。")
         elif count <= 30 and any(
             host in self.discovery_source_text.lower()
-            for host in ("douyin.com", "xiaohongshu.com", "bilibili.com")
+            for host in ("douyin.com", "xiaohongshu.com", "bilibili.com", "tiktok.com")
         ):
             self.status_label.setText(
                 f"已读取 {count} 个作品；如需更多，请先登录对应平台后重读。"
@@ -1819,6 +1930,8 @@ class MainWindow(QMainWindow):
             urls.append("https://www.bilibili.com/")
         if "小红书" in platforms:
             urls.append("https://www.xiaohongshu.com/explore")
+        if "TikTok" in platforms:
+            urls.append("https://www.tiktok.com/")
         if not urls:
             urls.append("https://www.baidu.com/")
         return urls
