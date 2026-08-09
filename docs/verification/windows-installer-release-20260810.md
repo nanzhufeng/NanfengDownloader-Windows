@@ -26,8 +26,12 @@
 
 ## 发布后核验
 
-- GitHub 远端资产大小与 SHA-256：待上传后核验。
-- 旧 Release 与标签删除：待新资产校验完成后执行。
+- GitHub Release：`v2026.08.10-windows`，状态为正式发布并设为 Latest。
+- GitHub 远端只包含 `NanfengDownloader-Windows-v2026.08.10-Setup.exe` 一个资产。
+- GitHub 远端资产大小为 `144092377` 字节，与本地一致。
+- GitHub 服务端 SHA-256 为 `980CCD9A0B4CA21AB26FD7599DFB3AF49A1E36F928E1E8DB0372270B29FC04EF`，与本地一致。
+- Release 正文未上传或嵌入界面预览；预览只保留在 README 主页面。
+- 旧 `v2026.08.01.1-windows` Release 与标签已在新资产核验完成后删除。
 
 ## 验证边界
 
