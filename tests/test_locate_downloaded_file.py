@@ -92,6 +92,31 @@ class QueueLocateButtonTests(unittest.TestCase):
 
             reveal.assert_called_once_with(files[1].resolve())
 
+    def test_locating_a_long_filename_does_not_resize_the_main_window(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_file = Path(temp_dir) / (("很长的视频标题文件名" * 18) + ".mp4")
+            output_file.write_bytes(b"test media")
+            self.window.resize(1200, 800)
+            self.window.show()
+            self.app.processEvents()
+            self.window._add_queue_row(
+                url="https://example.test/long-title",
+                platform="测试平台",
+                title="长标题",
+            )
+            self.window._on_item_finished(0, output_file.name, [str(output_file)])
+            self.app.processEvents()
+            size_before = self.window.size()
+            minimum_width_before = self.window.minimumSizeHint().width()
+
+            with patch("app.main.reveal_file_in_explorer", return_value=output_file.resolve()):
+                self.window._reveal_row_output(0)
+            self.app.processEvents()
+
+            self.assertEqual(self.window.size(), size_before)
+            self.assertLessEqual(self.window.minimumSizeHint().width(), minimum_width_before)
+            self.assertIn(output_file.name, self.window.status_label.toolTip())
+
 
 if __name__ == "__main__":
     unittest.main()

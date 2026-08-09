@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QPlainTextEdit,
     QProgressBar,
+    QSizePolicy,
     QStyle,
     QStyledItemDelegate,
     QStyleOptionButton,
@@ -178,6 +179,19 @@ class CenterComboBox(QComboBox):
             self.hidePopup()
         else:
             self.showPopup()
+
+
+class CompactStatusLabel(QLabel):
+    """状态文字可被布局压缩，避免超长文件名反向撑大主窗口。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self.setToolTip(text)
 
 
 @dataclass
@@ -652,7 +666,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.table, 1)
 
         bottom_bar = QHBoxLayout()
-        self.status_label = QLabel()
+        self.status_label = CompactStatusLabel()
         self.status_label.setObjectName("Status")
         self.copy_tip_label = QLabel()
         self.copy_tip_label.setObjectName("CopyToast")
