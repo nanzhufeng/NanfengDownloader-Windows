@@ -33,6 +33,7 @@ startup-log.txt
 *.tmp
 .tmp-wpc-probe/
 .verification-downloads/
+.release-verify-*/
 docs/verification/real-download-latest.json
 docs/verification/real-catalog-latest.json
 docs/verification/youtube-candidate.json

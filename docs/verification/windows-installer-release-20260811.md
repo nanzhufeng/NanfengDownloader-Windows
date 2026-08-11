@@ -24,11 +24,12 @@
 
 ## GitHub 正式发布资产
 
-- 云端构建：GitHub Actions `31512935513`，成功执行 72 项测试、PyInstaller、Inno Setup 7 x64 和随包 `_internal/tools/node/node.exe` 校验。
+- 云端构建：GitHub Actions `31515230953`，成功执行 72 项测试、PyInstaller、Inno Setup 7 x64、随包 `_internal/tools/node/node.exe` 校验，以及随包 `ffmpeg.exe -version` 实际执行校验。
 - Release：`v2026.08.11-windows`。
-- 大小：`98,115,346` 字节。
-- SHA-256：`B7C9FC8D6C1F99F72D353BFC3279B2B7E71F03CFD39A07144073045BF8544756`。
+- 大小：`178,001,895` 字节。
+- SHA-256：`71D3CF09A10DAB8CA4335B7D661F3941559C936A7FB508C11E8F67C71074B05C`。
 - 旧 `v2026.08.10-windows` 已在新资产远端摘要核对完成后删除。
+- 本机对该 Release 的二次完整复下载仍受本机 GitHub 大文件传输 EOF 影响而中断；因此本条不将第二次本地隔离安装写为已完成，云端随包 FFmpeg 执行校验与远端 SHA-256 是当前发布验证证据。
 
 ## 发布边界
 
