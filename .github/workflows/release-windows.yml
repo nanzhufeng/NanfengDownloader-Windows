@@ -59,8 +59,8 @@ jobs:
         shell: pwsh
         run: |
           python -m unittest discover -s tests -v
-          $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-7.0.2.exe'
-          Invoke-WebRequest 'https://files.jrsoftware.org/is/7/innosetup-7.0.2.exe' -OutFile $innoInstaller
+          $innoInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-7.0.2-x64.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-7.0.2-x64.exe' -OutFile $innoInstaller
           Start-Process -FilePath $innoInstaller -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
           $iscc = Get-ChildItem 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe','C:\Program Files\Inno Setup 7\ISCC.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $iscc) { throw 'Inno Setup 7 compiler was not found.' }
