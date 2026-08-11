@@ -23,7 +23,7 @@
 | 浏览器自动化 | Playwright |
 | 视频处理 | 随包 FFmpeg |
 | 打包 | PyInstaller 6.21.0 one-folder EXE；Inno Setup 7 x64 默认安装器，6 仅兼容回退 |
-| 测试 | Python `unittest`，`tests/` 下 68 项回归测试 |
+| 测试 | Python `unittest`，`tests/` 下 71 项回归测试 |
 | 发布 | 私有 GitHub 仓库与 GitHub Release |
 
 ## 3. 目录结构与职责
@@ -104,25 +104,24 @@ CleanVideoDownloader/
 
 以下为截至 2026-08-11 的最近验证，不应被理解为对所有平台、所有网络和所有内容的永久保证。
 
-- **已实现且单元测试通过**：68 项 `unittest` 回归测试，覆盖五平台识别、B站作者过滤与多 P 展开、小红书视频笔记解析与断点续传、Mac 抖音分享文本、TikTok 短链/作者过滤与独立登录、5个平台侧栏与登录按钮图标、登录边界提示、抖音浏览器嗅探等待、抖音连接重试与 HTTP Range 断点续传、下载速度参数、分辨率选择、YouTube 登录/公开重试、媒体完整性、停止、执行时勾选、网络恢复、逐行精确定位输出文件、定位长文件名时窗口尺寸稳定，以及链接输入框独立清空。
+- **已实现且单元测试通过**：71 项 `unittest` 回归测试，覆盖五平台识别、B站作者过滤与多 P 展开、小红书视频笔记解析与断点续传、Mac 抖音分享文本、TikTok 短链/作者过滤与独立登录、5个平台侧栏与登录按钮图标、登录边界提示、抖音浏览器嗅探等待、抖音连接重试与 HTTP Range 断点续传、下载速度参数、分辨率选择、YouTube 登录/公开重试、媒体完整性、停止、执行时勾选、网络恢复、逐行精确定位输出文件、定位长文件名时窗口尺寸稳定、链接输入框独立清空，以及下载完成时按本次批次突出显示成功、失败、跳过和停止数量。
 - **已构建且启动验证**：Windows PyInstaller 包可启动；成品内确认存在 FFmpeg、Node.js、PO Provider 构建文件。
-- **当前发布版本**：`v2026.08.10-windows`，修复逐行定位长文件名时主窗口自动横向扩张的问题。
-- **当前源码未发布修复**：抖音直连下载新增最多 8 次有限重试、提前结束断点续传和 Range 忽略时安全重下；同一失败作品真实下载经历 4 次连接中断后成功，并通过全数据包扫描。详见 `docs/verification/douyin-resume-regression-20260811.md`。
+- **当前发布候选**：`v2026.08.11-windows` 已完成 Inno Setup 7 x64 构建、静默安装、运行、卸载和发布合同验证，包含逐行定位长文件名时窗口尺寸稳定、抖音断点续传加强，以及下载完成时成功/失败结果的强调提示。
 - **真实服务基线已建立**：YouTube/抖音单视频实际下载和 ffprobe 验证通过，YouTube 频道与抖音作者目录语义通过；详见 `docs/verification/windows-real-regression-20260718.md`。
 - **新增平台真实验证**：B站和小红书各完成一个长视频、一个短视频的实际下载，均通过 FFprobe 和 FFmpeg 全数据包扫描；B站 UP 主空间浏览器回退已读取同一主体作品。小红书作者列表仍需在软件内完成登录后做最终真实验收；详见 `docs/verification/bilibili-xiaohongshu-regression-20260726.md`。
 - **TikTok 与 Mac 抖音输入验证**：TikTok 作者页严格同主体，34 秒和 63 秒长短视频均完成实际下载及媒体扫描；Mac 抖音完整分享文案成功解析为单作品。详见 `docs/verification/tiktok-mac-douyin-regression-20260801.md`。
 
 最新 Windows 发布包：
 
-- GitHub Release：<https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.10-windows>
-- 资产：`NanfengDownloader-Windows-v2026.08.10-Setup.exe`
-- SHA-256：`980CCD9A0B4CA21AB26FD7599DFB3AF49A1E36F928E1E8DB0372270B29FC04EF`
+- GitHub Release：<https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.11-windows>
+- 资产：`NanfengDownloader-Windows-v2026.08.11-Setup.exe`
+- SHA-256：`4DA39B65282BBFF3295A16FE7F50E757F4E6C9A13C824F24BD56C04968A97091`
 
 ## 6. Git 与发布边界
 
 - 当前源码根目录历史混入 Android 相关工作，且工作区长期可能处于 dirty 状态；**不要直接把该根目录推送到 Windows 发布仓库**。
 - Windows 发布使用独立仓库：`D:\CodexProjects\NanfengDownloader-Windows`。
-- 当前 Release 标签：`v2026.08.10-windows`。
+- 当前待发布 Release 标签：`v2026.08.11-windows`。
 - Windows 发布仓库：<https://github.com/nanzhufeng/NanfengDownloader-Windows>（私有）。
 - 每次发布：运行测试 → PyInstaller 清洁构建 → 默认用 Inno Setup 7 x64 生成 `*-Windows-*-Setup.exe` → 静默安装、依赖、启动和卸载验证 → 计算 SHA-256 → 提交并推送 Windows 源码 → 创建 Release → 核对远端大小和摘要 → 新资产确认后再删除旧 Release。Inno Setup 6 只作为兼容回退。
 

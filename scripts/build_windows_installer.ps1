@@ -47,7 +47,7 @@ try {
         throw "Inno Setup build failed."
     }
 
-    $installer = Join-Path $projectRoot "installer\NanfengDownloader-Windows-v2026.08.10-Setup.exe"
+    $installer = Join-Path $projectRoot "installer\NanfengDownloader-Windows-v2026.08.11-Setup.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "Installer was not created: $installer"
     }

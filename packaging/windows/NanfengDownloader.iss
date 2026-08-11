@@ -1,5 +1,5 @@
 ﻿#define MyAppName "南枫下载"
-#define MyAppVersion "2026.8.10"
+#define MyAppVersion "2026.8.11"
 #define MyAppPublisher "南烛枫"
 #define MyAppExeName "南枫下载.exe"
 #define MyAppSourceDir "..\..\dist\南枫下载"
@@ -18,7 +18,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#MyAppOutputDir}
-OutputBaseFilename=NanfengDownloader-Windows-v2026.08.10-Setup
+OutputBaseFilename=NanfengDownloader-Windows-v2026.08.11-Setup
 SetupIconFile=..\..\app\assets\nanzhufeng-icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
@@ -26,7 +26,7 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=force
 RestartApplications=no
-VersionInfoVersion=2026.8.10.0
+VersionInfoVersion=2026.8.11.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Windows 安装程序
 VersionInfoProductName={#MyAppName}
