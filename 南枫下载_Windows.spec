@@ -32,8 +32,11 @@ else:
     raise SystemExit('没有找到 FFmpeg。请设置 NANFENG_FFMPEG_DIR，或放到 tools/ffmpeg。')
 
 local_app_data = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local'))
-provider_build = local_app_data / 'NanfengDownloader' / 'bgutil-ytdlp-pot-provider' / 'server' / 'build'
-if not provider_build.exists():
+configured_provider_build = os.environ.get('NANFENG_BGUTIL_BUILD')
+provider_build = Path(configured_provider_build) if configured_provider_build else (
+    local_app_data / 'NanfengDownloader' / 'bgutil-ytdlp-pot-provider' / 'server' / 'build'
+)
+if not provider_build.exists() and not configured_provider_build:
     provider_build = local_app_data / 'NanzhufengVideoDownloader' / 'bgutil-ytdlp-pot-provider' / 'server' / 'build'
 if provider_build.exists():
     datas.append((str(provider_build), 'tools/bgutil-ytdlp-pot-provider/server/build'))
