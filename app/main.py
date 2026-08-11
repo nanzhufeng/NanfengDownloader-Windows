@@ -13,6 +13,7 @@ from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QThread, QTimer, S
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -192,6 +193,100 @@ class CompactStatusLabel(QLabel):
     def setText(self, text: str) -> None:
         super().setText(text)
         self.setToolTip(text)
+
+
+class DownloadSummaryDialog(QDialog):
+    """将下载结果中的成功与失败以明确颜色和数量呈现。"""
+
+    def __init__(self, counts: dict[str, int], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("DownloadSummaryDialog")
+        self.setWindowTitle("下载结果")
+        self.setModal(True)
+        self.setMinimumWidth(500)
+
+        completed = counts.get("完成", 0)
+        skipped = counts.get("已跳过", 0)
+        failed = counts.get("失败", 0)
+        stopped = counts.get("已停止", 0)
+        total = completed + skipped + failed + stopped
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(26, 24, 26, 22)
+        layout.setSpacing(14)
+
+        if failed:
+            headline = "下载任务存在失败项"
+            headline_name = "DownloadSummaryTitleFailure"
+        elif stopped:
+            headline = "下载任务已停止"
+            headline_name = "DownloadSummaryTitleStopped"
+        else:
+            headline = "下载全部完成"
+            headline_name = "DownloadSummaryTitleSuccess"
+
+        self.headline_label = QLabel(headline)
+        self.headline_label.setObjectName(headline_name)
+        self.headline_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.headline_label)
+
+        subtitle = QLabel(f"本次共处理 {total} 项，请重点查看成功与失败结果。")
+        subtitle.setObjectName("DownloadSummarySubtitle")
+        subtitle.setAlignment(Qt.AlignCenter)
+        layout.addWidget(subtitle)
+
+        cards_layout = QHBoxLayout()
+        cards_layout.setSpacing(10)
+        self.success_card, self.success_count_label = self._create_count_card(
+            "DownloadSummarySuccess", "成功", completed
+        )
+        self.failure_card, self.failure_count_label = self._create_count_card(
+            "DownloadSummaryFailure", "失败", failed
+        )
+        skipped_card, skipped_count_label = self._create_count_card(
+            "DownloadSummarySkipped", "跳过", skipped
+        )
+        stopped_card, self.stopped_count_label = self._create_count_card(
+            "DownloadSummaryStopped", "停止", stopped
+        )
+        self.skipped_count_label = skipped_count_label
+        for card in (self.success_card, self.failure_card, skipped_card, stopped_card):
+            cards_layout.addWidget(card)
+        layout.addLayout(cards_layout)
+
+        hint = QLabel(
+            "失败项目会保留在队列中，可查看红色状态后重新勾选下载；"
+            "跳过表示已存在对应文件。"
+        )
+        hint.setObjectName("DownloadSummaryHint")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        close_button = QPushButton("关闭")
+        close_button.setObjectName("DownloadSummaryClose")
+        close_button.setDefault(True)
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button, 0, Qt.AlignCenter)
+
+    @staticmethod
+    def _create_count_card(object_name: str, label: str, count: int) -> tuple[QFrame, QLabel]:
+        card = QFrame()
+        card.setObjectName(object_name)
+        card.setMinimumSize(102, 86)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(10, 10, 10, 10)
+        card_layout.setSpacing(2)
+
+        count_label = QLabel(str(count))
+        count_label.setObjectName(f"{object_name}Count")
+        count_label.setAlignment(Qt.AlignCenter)
+        label_widget = QLabel(label)
+        label_widget.setObjectName("DownloadSummaryCardLabel")
+        label_widget.setAlignment(Qt.AlignCenter)
+        card_layout.addWidget(count_label)
+        card_layout.addWidget(label_widget)
+        return card, count_label
 
 
 @dataclass
@@ -833,6 +928,83 @@ class MainWindow(QMainWindow):
                 background: #ffffff;
                 border: 1px solid #e5eaf3;
                 border-radius: 8px;
+            }
+            QDialog#DownloadSummaryDialog {
+                background: #ffffff;
+            }
+            QLabel#DownloadSummaryTitleSuccess,
+            QLabel#DownloadSummaryTitleFailure,
+            QLabel#DownloadSummaryTitleStopped {
+                font-size: 20px;
+                font-weight: 800;
+            }
+            QLabel#DownloadSummaryTitleSuccess {
+                color: #15803d;
+            }
+            QLabel#DownloadSummaryTitleFailure {
+                color: #dc2626;
+            }
+            QLabel#DownloadSummaryTitleStopped {
+                color: #64748b;
+            }
+            QLabel#DownloadSummarySubtitle {
+                color: #64748b;
+            }
+            QFrame#DownloadSummarySuccess,
+            QFrame#DownloadSummaryFailure,
+            QFrame#DownloadSummarySkipped,
+            QFrame#DownloadSummaryStopped {
+                border-radius: 8px;
+            }
+            QFrame#DownloadSummarySuccess {
+                background: #ecfdf3;
+                border: 1px solid #bbf7d0;
+            }
+            QFrame#DownloadSummaryFailure {
+                background: #fef2f2;
+                border: 1px solid #fecaca;
+            }
+            QFrame#DownloadSummarySkipped {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+            }
+            QFrame#DownloadSummaryStopped {
+                background: #fff7ed;
+                border: 1px solid #fed7aa;
+            }
+            QLabel#DownloadSummarySuccessCount,
+            QLabel#DownloadSummaryFailureCount,
+            QLabel#DownloadSummarySkippedCount,
+            QLabel#DownloadSummaryStoppedCount {
+                font-size: 24px;
+                font-weight: 800;
+            }
+            QLabel#DownloadSummarySuccessCount {
+                color: #15803d;
+            }
+            QLabel#DownloadSummaryFailureCount {
+                color: #dc2626;
+            }
+            QLabel#DownloadSummarySkippedCount {
+                color: #64748b;
+            }
+            QLabel#DownloadSummaryStoppedCount {
+                color: #c2410c;
+            }
+            QLabel#DownloadSummaryCardLabel,
+            QLabel#DownloadSummaryHint {
+                color: #64748b;
+                font-weight: 700;
+            }
+            QPushButton#DownloadSummaryClose {
+                min-width: 120px;
+                background: #3461ff;
+                border: 1px solid #3461ff;
+                color: #ffffff;
+                font-weight: 700;
+            }
+            QPushButton#DownloadSummaryClose:hover {
+                background: #254ff0;
             }
             QPlainTextEdit, QLineEdit, QComboBox {
                 background: #fbfcff;
@@ -1609,11 +1781,11 @@ class MainWindow(QMainWindow):
         if not items_rows:
             self.status_label.setText("下载任务已结束。")
             self.main_progress.setValue(100)
-            summary = self._download_summary_text()
+            counts = self._download_summary_counts()
             self.active_download_rows.clear()
             self.download_started_at = None
             self.total_eta_label.setText("总剩余：0秒")
-            QMessageBox.information(self, "下载完成", summary)
+            self._show_download_summary(counts)
             return
         if skipped:
             self.status_label.setText(f"已快速跳过 {skipped} 个已存在文件，正在下载剩余项目。")
@@ -1816,11 +1988,11 @@ class MainWindow(QMainWindow):
             self.status_label.setText("YouTube 需要账号验证；完成登录后可重新开始下载。")
             return
         self.status_label.setText("下载任务已结束。")
-        summary = self._download_summary_text()
+        counts = self._download_summary_counts()
         self.active_download_rows.clear()
         self.download_started_at = None
         self.total_eta_label.setText("总剩余：0秒")
-        QMessageBox.information(self, "下载完成", summary)
+        self._show_download_summary(counts)
 
     @Slot()
     def _cleanup_worker(self) -> None:
@@ -1857,7 +2029,7 @@ class MainWindow(QMainWindow):
         self.main_progress.setValue(max(0, min(100, percent)))
         self._update_total_eta(progress_units / total)
 
-    def _download_summary_text(self) -> str:
+    def _download_summary_counts(self) -> dict[str, int]:
         rows = sorted(self.active_download_rows) if self.active_download_rows else list(range(self.table.rowCount()))
         counts = {"完成": 0, "已跳过": 0, "失败": 0, "已停止": 0}
         for row in rows:
@@ -1867,6 +2039,13 @@ class MainWindow(QMainWindow):
             status = status_item.text()
             if status in counts:
                 counts[status] += 1
+        return counts
+
+    def _show_download_summary(self, counts: dict[str, int] | None = None) -> None:
+        DownloadSummaryDialog(counts or self._download_summary_counts(), self).exec()
+
+    def _download_summary_text(self) -> str:
+        counts = self._download_summary_counts()
         total = sum(counts.values())
         return (
             f"本次任务已结束。\n\n"
