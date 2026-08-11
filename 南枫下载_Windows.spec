@@ -41,9 +41,14 @@ if not provider_build.exists() and not configured_provider_build:
 if provider_build.exists():
     datas.append((str(provider_build), 'tools/bgutil-ytdlp-pot-provider/server/build'))
 
-node_executable = Path(os.environ.get('ProgramFiles', r'C:\\Program Files')) / 'nodejs' / 'node.exe'
+configured_node_executable = os.environ.get('NANFENG_NODE_EXE')
+node_executable = Path(configured_node_executable) if configured_node_executable else (
+    Path(os.environ.get('ProgramFiles', r'C:\\Program Files')) / 'nodejs' / 'node.exe'
+)
 if node_executable.exists():
     datas.append((str(node_executable), 'tools/node'))
+elif configured_node_executable:
+    raise SystemExit('配置的 Node.js 运行时不存在：' + str(node_executable))
 
 
 a = Analysis(

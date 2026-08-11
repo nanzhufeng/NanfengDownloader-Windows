@@ -54,6 +54,8 @@ jobs:
           "NANFENG_BGUTIL_BUILD=$providerRoot\server\build" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           $ffmpegDirectory = Split-Path -Parent (Get-Command ffmpeg.exe -ErrorAction Stop).Source
           "NANFENG_FFMPEG_DIR=$ffmpegDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          $nodeExecutable = (Get-Command node.exe -ErrorAction Stop).Source
+          "NANFENG_NODE_EXE=$nodeExecutable" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Run tests and build Inno Setup 7 installer
         shell: pwsh
@@ -67,6 +69,8 @@ jobs:
           python -m PyInstaller --noconfirm --clean .\南枫下载_Windows.spec
           & $iscc.FullName .\packaging\windows\NanfengDownloader.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+          $bundledNode = Get-ChildItem .\dist\南枫下载\tools\node\node.exe -ErrorAction SilentlyContinue
+          if (-not $bundledNode) { throw 'Bundled Node.js runtime is missing.' }
 
       - name: Publish release asset
         shell: pwsh
