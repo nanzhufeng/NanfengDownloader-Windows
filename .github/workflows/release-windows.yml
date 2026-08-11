@@ -52,7 +52,15 @@ jobs:
           npx tsc --project tsconfig.json
           Pop-Location
           "NANFENG_BGUTIL_BUILD=$providerRoot\server\build" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          $ffmpegDirectory = Split-Path -Parent (Get-Command ffmpeg.exe -ErrorAction Stop).Source
+          # Chocolatey's bin entry is a shim. Bundle the actual FFmpeg binaries,
+          # otherwise the installer works only on the build machine.
+          $chocolateyRoot = if ($env:ChocolateyInstall) { $env:ChocolateyInstall } else { 'C:\ProgramData\chocolatey' }
+          $ffmpegDirectory = Get-ChildItem (Join-Path $chocolateyRoot 'lib') -Directory |
+            Where-Object { $_.Name -like 'ffmpeg*' } |
+            ForEach-Object { Join-Path $_.FullName 'tools\ffmpeg\bin' } |
+            Where-Object { (Test-Path (Join-Path $_ 'ffmpeg.exe')) -and (Test-Path (Join-Path $_ 'ffprobe.exe')) } |
+            Select-Object -First 1
+          if (-not $ffmpegDirectory) { throw 'Chocolatey FFmpeg binaries were not found.' }
           "NANFENG_FFMPEG_DIR=$ffmpegDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           $nodeExecutable = (Get-Command node.exe -ErrorAction Stop).Source
           "NANFENG_NODE_EXE=$nodeExecutable" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -73,6 +81,9 @@ jobs:
           # aligned with the runtime lookup so a cloud Release cannot omit Node.
           $bundledNode = Get-ChildItem .\dist\南枫下载\_internal\tools\node\node.exe -ErrorAction SilentlyContinue
           if (-not $bundledNode) { throw 'Bundled Node.js runtime is missing.' }
+          $bundledFfmpeg = Get-Item .\dist\南枫下载\_internal\tools\ffmpeg\ffmpeg.exe -ErrorAction Stop
+          & $bundledFfmpeg.FullName -version | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Bundled FFmpeg runtime is not executable.' }
 
       - name: Publish release asset
         shell: pwsh
