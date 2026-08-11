@@ -238,7 +238,7 @@ def _discover_space_with_browser(url: str, options: Any, max_items: int) -> list
 
     if not items:
         raise RuntimeError(
-            "哔哩哔哩没有返回可确认归属的 UP 主视频。请先点击“登录哔哩哔哩”后重试。"
+            "哔哩哔哩没有返回可确认归属的 UP 主视频。请先点击顶部哔哩哔哩按钮后重试。"
         )
     return items[:max_items]
 
@@ -284,7 +284,7 @@ def discover_bilibili_items(url: str, options: Any, max_items: int = 500) -> lis
             return _discover_space_with_browser(url, options, max_items)
         if "412" in detail or "precondition failed" in detail:
             raise RuntimeError(
-                "哔哩哔哩触发了访问保护（HTTP 412）。请先点击“登录哔哩哔哩”，"
+                "哔哩哔哩触发了访问保护（HTTP 412）。请先点击顶部哔哩哔哩按钮，"
                 "或稍后更换网络后重试。"
             ) from exc
         raise

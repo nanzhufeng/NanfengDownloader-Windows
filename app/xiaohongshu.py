@@ -288,7 +288,7 @@ def fetch_xiaohongshu_info(
         browser.close()
     if not note:
         raise RuntimeError(
-            "小红书没有返回笔记详情。请先点击“登录小红书”，确认能看到该笔记后重试。"
+            "小红书没有返回笔记详情。请先点击顶部小红书按钮，确认能看到该笔记后重试。"
         )
     return parse_xiaohongshu_note(note, quality or options.quality), final_url
 
@@ -375,11 +375,11 @@ def discover_xiaohongshu_items(url: str, options: Any, max_items: int = 500) -> 
 
     if not items and hidden_note_seen:
         raise RuntimeError(
-            "小红书未登录时隐藏了作者作品 ID。请点击“登录小红书”，完成登录后重新读取。"
+            "小红书未连接时隐藏了作者作品 ID。请点击顶部小红书按钮，完成连接后重新读取。"
         )
     if not items:
         raise RuntimeError(
-            "没有读取到该作者的可下载视频笔记。请先点击“登录小红书”后重试；"
+            "没有读取到该作者的可下载视频笔记。请先点击顶部小红书按钮后重试；"
             "图文笔记不会加入视频队列。"
         )
     return items[:max_items]

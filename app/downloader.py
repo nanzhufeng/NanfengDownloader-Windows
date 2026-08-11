@@ -334,11 +334,11 @@ def friendly_youtube_auth_error(exc: Exception) -> RuntimeError | None:
                 "请切换代理节点或网络后重试；登录仅作为需要账号权限内容的可选后备。"
             )
         return RuntimeError(
-            "YouTube 需要账号验证，软件内 YouTube 当前未登录。请点击顶部“登录 YouTube”，"
+            "YouTube 需要账号验证，软件内 YouTube 当前未连接。请点击顶部 YouTube 按钮，"
             "完成登录并确认页面右上角显示账号头像；关闭登录窗口后，再重新下载。"
         )
     return RuntimeError(
-        "YouTube 需要账号验证，当前登录态已失效或被平台临时限制。请重新点击顶部“登录 YouTube”，"
+        "YouTube 需要账号验证，当前会话已失效或被平台临时限制。请重新点击顶部 YouTube 按钮，"
         "确认账号仍处于登录状态并关闭窗口，然后重试；批量请求过快时也可能需要稍后再试。"
     )
 

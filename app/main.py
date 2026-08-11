@@ -203,7 +203,7 @@ class DownloadSummaryDialog(QDialog):
         self.setObjectName("DownloadSummaryDialog")
         self.setWindowTitle("下载结果")
         self.setModal(True)
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(420)
 
         completed = counts.get("完成", 0)
         skipped = counts.get("已跳过", 0)
@@ -212,8 +212,8 @@ class DownloadSummaryDialog(QDialog):
         total = completed + skipped + failed + stopped
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(26, 24, 26, 22)
-        layout.setSpacing(14)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(9)
 
         if failed:
             headline = "下载任务存在失败项"
@@ -230,13 +230,13 @@ class DownloadSummaryDialog(QDialog):
         self.headline_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.headline_label)
 
-        subtitle = QLabel(f"本次共处理 {total} 项，请重点查看成功与失败结果。")
+        subtitle = QLabel(f"本次处理 {total} 项，请查看成功与失败结果。")
         subtitle.setObjectName("DownloadSummarySubtitle")
         subtitle.setAlignment(Qt.AlignCenter)
         layout.addWidget(subtitle)
 
         cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(10)
+        cards_layout.setSpacing(8)
         self.success_card, self.success_count_label = self._create_count_card(
             "DownloadSummarySuccess", "成功", completed
         )
@@ -255,8 +255,7 @@ class DownloadSummaryDialog(QDialog):
         layout.addLayout(cards_layout)
 
         hint = QLabel(
-            "失败项目会保留在队列中，可查看红色状态后重新勾选下载；"
-            "跳过表示已存在对应文件。"
+            "失败项目保留在队列中，可重新勾选下载；跳过表示本地已有对应文件。"
         )
         hint.setObjectName("DownloadSummaryHint")
         hint.setWordWrap(True)
@@ -272,11 +271,11 @@ class DownloadSummaryDialog(QDialog):
     def _create_count_card(object_name: str, label: str, count: int) -> tuple[QFrame, QLabel]:
         card = QFrame()
         card.setObjectName(object_name)
-        card.setMinimumSize(102, 86)
+        card.setMinimumSize(78, 64)
         card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(10, 10, 10, 10)
-        card_layout.setSpacing(2)
+        card_layout.setContentsMargins(6, 5, 6, 5)
+        card_layout.setSpacing(0)
 
         count_label = QLabel(str(count))
         count_label.setObjectName(f"{object_name}Count")
@@ -599,23 +598,23 @@ class MainWindow(QMainWindow):
 
         login_label = QLabel("登录")
         login_label.setObjectName("FieldLabel")
-        self.login_douyin_button = QPushButton("登录抖音")
+        self.login_douyin_button = QPushButton("抖音")
         self.login_douyin_button.setObjectName("LoginDouyinButton")
         self.login_douyin_button.setFixedWidth(150)
         self.login_douyin_button.clicked.connect(lambda: self._open_login_window("douyin"))
-        self.login_youtube_button = QPushButton("登录 YouTube")
+        self.login_youtube_button = QPushButton("YouTube")
         self.login_youtube_button.setObjectName("LoginYoutubeButton")
         self.login_youtube_button.setFixedWidth(150)
         self.login_youtube_button.clicked.connect(lambda: self._open_login_window("youtube"))
-        self.login_bilibili_button = QPushButton("登录哔哩哔哩")
+        self.login_bilibili_button = QPushButton("哔哩哔哩")
         self.login_bilibili_button.setObjectName("LoginBilibiliButton")
         self.login_bilibili_button.setFixedWidth(150)
         self.login_bilibili_button.clicked.connect(lambda: self._open_login_window("bilibili"))
-        self.login_xiaohongshu_button = QPushButton("登录小红书")
+        self.login_xiaohongshu_button = QPushButton("小红书")
         self.login_xiaohongshu_button.setObjectName("LoginXiaohongshuButton")
         self.login_xiaohongshu_button.setFixedWidth(150)
         self.login_xiaohongshu_button.clicked.connect(lambda: self._open_login_window("xiaohongshu"))
-        self.login_tiktok_button = QPushButton("登录 TikTok")
+        self.login_tiktok_button = QPushButton("TikTok")
         self.login_tiktok_button.setObjectName("LoginTikTokButton")
         self.login_tiktok_button.setFixedWidth(150)
         self.login_tiktok_button.clicked.connect(lambda: self._open_login_window("tiktok"))
@@ -935,7 +934,7 @@ class MainWindow(QMainWindow):
             QLabel#DownloadSummaryTitleSuccess,
             QLabel#DownloadSummaryTitleFailure,
             QLabel#DownloadSummaryTitleStopped {
-                font-size: 20px;
+                font-size: 17px;
                 font-weight: 800;
             }
             QLabel#DownloadSummaryTitleSuccess {
@@ -949,6 +948,7 @@ class MainWindow(QMainWindow):
             }
             QLabel#DownloadSummarySubtitle {
                 color: #64748b;
+                font-size: 12px;
             }
             QFrame#DownloadSummarySuccess,
             QFrame#DownloadSummaryFailure,
@@ -976,7 +976,7 @@ class MainWindow(QMainWindow):
             QLabel#DownloadSummaryFailureCount,
             QLabel#DownloadSummarySkippedCount,
             QLabel#DownloadSummaryStoppedCount {
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: 800;
             }
             QLabel#DownloadSummarySuccessCount {
@@ -994,10 +994,12 @@ class MainWindow(QMainWindow):
             QLabel#DownloadSummaryCardLabel,
             QLabel#DownloadSummaryHint {
                 color: #64748b;
-                font-weight: 700;
+                font-size: 12px;
+                font-weight: 600;
             }
             QPushButton#DownloadSummaryClose {
-                min-width: 120px;
+                min-width: 96px;
+                min-height: 28px;
                 background: #3461ff;
                 border: 1px solid #3461ff;
                 color: #ffffff;
@@ -1251,7 +1253,7 @@ class MainWindow(QMainWindow):
         self.login_xiaohongshu_button.setEnabled(browser_available)
         self.login_tiktok_button.setEnabled(browser_available)
         self.login_youtube_button.setText(
-            "YouTube 已登录" if has_youtube_account_cookies() else "登录 YouTube"
+            "YouTube（已连接）" if has_youtube_account_cookies() else "YouTube"
         )
         if not browser_available:
             self.status_label.setText("未找到 Chrome 或 Edge：软件可打开，但软件内登录窗口不可用。")
@@ -1434,11 +1436,11 @@ class MainWindow(QMainWindow):
         source = self.discovery_source_text.lower()
         login_platform: str | None = None
         login_name = ""
-        if "登录小红书" in error and ("xiaohongshu.com" in source or "xhslink.com" in source):
+        if "小红书按钮" in error and ("xiaohongshu.com" in source or "xhslink.com" in source):
             login_platform, login_name = "xiaohongshu", "小红书"
-        elif "登录哔哩哔哩" in error and ("bilibili.com" in source or "b23.tv" in source):
+        elif "哔哩哔哩按钮" in error and ("bilibili.com" in source or "b23.tv" in source):
             login_platform, login_name = "bilibili", "哔哩哔哩"
-        elif "登录 tiktok" in error.lower() and "tiktok.com" in source:
+        elif "tiktok 按钮" in error.lower() and "tiktok.com" in source:
             login_platform, login_name = "tiktok", "TikTok"
         if login_platform:
             answer = QMessageBox.question(

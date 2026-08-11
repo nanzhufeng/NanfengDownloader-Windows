@@ -74,7 +74,7 @@ class PlatformLoginLayoutTests(unittest.TestCase):
             ]
             self.assertEqual(
                 [button.text() for button in buttons],
-                ["登录抖音", "登录 YouTube", "登录哔哩哔哩", "登录小红书", "登录 TikTok"],
+                ["抖音", "YouTube", "哔哩哔哩", "小红书", "TikTok"],
             )
             self.assertEqual([button.width() for button in buttons], [150, 150, 150, 150, 150])
             self.assertEqual(len({button.geometry().y() for button in buttons}), 1)

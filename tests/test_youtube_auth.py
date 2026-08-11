@@ -85,8 +85,8 @@ class YouTubeAuthErrorTests(unittest.TestCase):
         )
 
         self.assertIsNotNone(error)
-        self.assertIn("当前未登录", str(error))
-        self.assertIn("登录 YouTube", str(error))
+        self.assertIn("当前未连接", str(error))
+        self.assertIn("YouTube 按钮", str(error))
 
     @patch("app.downloader.youtube_pot_provider_ready", return_value=True)
     @patch("app.downloader.has_youtube_account_cookies", return_value=False)

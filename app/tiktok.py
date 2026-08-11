@@ -112,14 +112,14 @@ def _friendly_tiktok_error(exc: Exception) -> RuntimeError:
     if "ip address is blocked" in normalized or "geo restricted" in normalized:
         return RuntimeError(
             "TikTok 拒绝了当前网络出口访问该作品。请切换网络或代理节点后重试；"
-            "如网页中登录后能够正常观看，也可以点击顶部“登录 TikTok”后重试。"
+            "如网页中连接后能够正常观看，也可以点击顶部 TikTok 按钮后重试。"
         )
     if any(
         marker in normalized
         for marker in ("login required", "sign in", "private", "captcha", "cookies")
     ):
         return RuntimeError(
-            "TikTok 需要登录或验证当前访问。请点击顶部“登录 TikTok”，"
+            "TikTok 需要连接或验证当前访问。请点击顶部 TikTok 按钮，"
             "确认能在独立窗口中查看该作品后关闭窗口，再重新读取。"
         )
     return RuntimeError(detail)

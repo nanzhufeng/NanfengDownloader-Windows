@@ -27,6 +27,13 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertEqual(dialog.failure_count_label.text(), "1")
         self.assertEqual(dialog.stopped_count_label.text(), "1")
 
+    def test_compact_layout_uses_smaller_dialog_and_cards(self) -> None:
+        dialog = DownloadSummaryDialog({"完成": 1, "已跳过": 0, "失败": 0, "已停止": 0})
+
+        self.assertEqual(dialog.minimumWidth(), 420)
+        self.assertGreaterEqual(dialog.success_card.minimumWidth(), 78)
+        self.assertLessEqual(dialog.success_card.minimumHeight(), 64)
+
     def test_summary_counts_only_the_active_batch_rows(self) -> None:
         window = MainWindow()
         try:
