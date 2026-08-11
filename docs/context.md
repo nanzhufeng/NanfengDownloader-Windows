@@ -1,6 +1,6 @@
 # 南枫下载：当前项目上下文
 
-> 最后整理：2026-08-01
+> 最后整理：2026-08-11
 > 适用范围：`D:\CodexProjects\NanfengDownloader-Windows` 的 Windows 桌面版。
 > 接手顺序：先读本文，再读 `AGENTS.md`（如存在）、`README.md`、相关代码和测试；以当前代码为准。
 
@@ -23,7 +23,7 @@
 | 浏览器自动化 | Playwright |
 | 视频处理 | 随包 FFmpeg |
 | 打包 | PyInstaller 6.21.0 one-folder EXE；Inno Setup 7 x64 默认安装器，6 仅兼容回退 |
-| 测试 | Python `unittest`，`tests/` 下 62 项回归测试 |
+| 测试 | Python `unittest`，`tests/` 下 68 项回归测试 |
 | 发布 | 私有 GitHub 仓库与 GitHub Release |
 
 ## 3. 目录结构与职责
@@ -102,11 +102,12 @@ CleanVideoDownloader/
 
 ## 5. 已验证状态
 
-以下为截至 2026-08-10 的最近验证，不应被理解为对所有平台、所有网络和所有内容的永久保证。
+以下为截至 2026-08-11 的最近验证，不应被理解为对所有平台、所有网络和所有内容的永久保证。
 
-- **已实现且单元测试通过**：63 项 `unittest` 回归测试，覆盖五平台识别、B站作者过滤与多 P 展开、小红书视频笔记解析与断点续传、Mac 抖音分享文本、TikTok 短链/作者过滤与独立登录、5个平台侧栏与登录按钮图标、登录边界提示、抖音浏览器嗅探等待、下载速度参数、分辨率选择、YouTube 登录/公开重试、媒体完整性、停止、执行时勾选、网络恢复、逐行精确定位输出文件、定位长文件名时窗口尺寸稳定，以及链接输入框独立清空。
+- **已实现且单元测试通过**：68 项 `unittest` 回归测试，覆盖五平台识别、B站作者过滤与多 P 展开、小红书视频笔记解析与断点续传、Mac 抖音分享文本、TikTok 短链/作者过滤与独立登录、5个平台侧栏与登录按钮图标、登录边界提示、抖音浏览器嗅探等待、抖音连接重试与 HTTP Range 断点续传、下载速度参数、分辨率选择、YouTube 登录/公开重试、媒体完整性、停止、执行时勾选、网络恢复、逐行精确定位输出文件、定位长文件名时窗口尺寸稳定，以及链接输入框独立清空。
 - **已构建且启动验证**：Windows PyInstaller 包可启动；成品内确认存在 FFmpeg、Node.js、PO Provider 构建文件。
 - **当前发布版本**：`v2026.08.10-windows`，修复逐行定位长文件名时主窗口自动横向扩张的问题。
+- **当前源码未发布修复**：抖音直连下载新增最多 8 次有限重试、提前结束断点续传和 Range 忽略时安全重下；同一失败作品真实下载经历 4 次连接中断后成功，并通过全数据包扫描。详见 `docs/verification/douyin-resume-regression-20260811.md`。
 - **真实服务基线已建立**：YouTube/抖音单视频实际下载和 ffprobe 验证通过，YouTube 频道与抖音作者目录语义通过；详见 `docs/verification/windows-real-regression-20260718.md`。
 - **新增平台真实验证**：B站和小红书各完成一个长视频、一个短视频的实际下载，均通过 FFprobe 和 FFmpeg 全数据包扫描；B站 UP 主空间浏览器回退已读取同一主体作品。小红书作者列表仍需在软件内完成登录后做最终真实验收；详见 `docs/verification/bilibili-xiaohongshu-regression-20260726.md`。
 - **TikTok 与 Mac 抖音输入验证**：TikTok 作者页严格同主体，34 秒和 63 秒长短视频均完成实际下载及媒体扫描；Mac 抖音完整分享文案成功解析为单作品。详见 `docs/verification/tiktok-mac-douyin-regression-20260801.md`。

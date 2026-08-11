@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.cookiejar
+import http.client
 import json
 import math
 import os
@@ -55,6 +56,8 @@ IMAGE_URL_HINTS = (
     ".webp",
     ".gif",
 )
+
+DOUYIN_DOWNLOAD_MAX_ATTEMPTS = 8
 NON_WORK_MEDIA_HINTS = (
     "douyin_pc_client",
     "bytednsdoc.com",
@@ -1008,6 +1011,13 @@ def _looks_like_media(data: bytes) -> bool:
     )
 
 
+def _content_range_total(value: str | None) -> int:
+    match = re.fullmatch(r"bytes\s+\d+-\d+/(\d+|\*)", (value or "").strip())
+    if not match or match.group(1) == "*":
+        return 0
+    return int(match.group(1))
+
+
 def _download_binary(
     url: str,
     target: Path,
@@ -1020,49 +1030,113 @@ def _download_binary(
         "Accept": "*/*",
         "Referer": "https://www.douyin.com/",
     }
-    request = urllib.request.Request(url, headers=headers)
     opener = _build_opener(options)
     target.parent.mkdir(parents=True, exist_ok=True)
     start_time = time.monotonic()
     downloaded = 0
+    total = 0
+    attempts = 0
+    max_attempts = DOUYIN_DOWNLOAD_MAX_ATTEMPTS
+    first_chunk_is_media = False
+    last_network_error: BaseException | None = None
+    retryable_network_errors = (
+        urllib.error.URLError,
+        ConnectionError,
+        TimeoutError,
+        http.client.IncompleteRead,
+    )
     try:
-        raise_if_cancelled(cancel_callback)
-        with opener.open(request, timeout=40) as response:
-            total = int(response.headers.get("Content-Length") or 0)
-            content_type = (response.headers.get("Content-Type") or "").lower()
-            if "text/html" in content_type or "application/json" in content_type:
-                raise RuntimeError(f"平台没有返回视频流，而是返回了 {content_type or '网页内容'}。请确认已登录后重新读取作品列表。")
-            first_chunk = response.read(1024 * 1024)
+        while total <= 0 or downloaded < total:
             raise_if_cancelled(cancel_callback)
-            if not first_chunk:
-                raise RuntimeError("平台返回了空内容，没有可保存的视频流。")
-            downloaded += len(first_chunk)
-            first_chunk_is_media = _looks_like_media(first_chunk)
+            request_headers = dict(headers)
+            if downloaded:
+                request_headers["Range"] = f"bytes={downloaded}-"
+            request = urllib.request.Request(url, headers=request_headers)
+            attempts += 1
+            before_request = downloaded
+            last_network_error = None
+            try:
+                with opener.open(request, timeout=40) as response:
+                    content_type = (response.headers.get("Content-Type") or "").lower()
+                    if "text/html" in content_type or "application/json" in content_type:
+                        raise RuntimeError(
+                            f"平台没有返回视频流，而是返回了 {content_type or '网页内容'}。"
+                            "请确认已登录后重新读取作品列表。"
+                        )
+                    response_status = int(getattr(response, "status", 0) or 0)
+                    content_range = str(response.headers.get("Content-Range") or "")
+                    ranged_total = _content_range_total(content_range)
+                    if downloaded and response_status != 206:
+                        # CDN 忽略 Range 时必须从头覆盖，不能把完整响应追加到半文件后面。
+                        downloaded = 0
+                        total = 0
+                        first_chunk_is_media = False
+                    if ranged_total:
+                        total = ranged_total
+                    elif downloaded == 0:
+                        total = int(response.headers.get("Content-Length") or 0)
 
-            with target.open("wb") as file_obj:
-                file_obj.write(first_chunk)
-                while True:
-                    raise_if_cancelled(cancel_callback)
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    raise_if_cancelled(cancel_callback)
-                    file_obj.write(chunk)
-                    downloaded += len(chunk)
-                    elapsed = max(time.monotonic() - start_time, 0.001)
-                    speed = downloaded / elapsed
-                    eta = (total - downloaded) / speed if total and speed else 0
-                    progress_callback(
-                        {
-                            "status": "downloading",
-                            "filename": str(target),
-                            "downloaded_bytes": downloaded,
-                            "total_bytes": total,
-                            "_speed_str": _format_speed(speed),
-                            "_eta_str": _format_eta(eta),
-                        }
-                    )
+                    with target.open("ab" if downloaded else "wb") as file_obj:
+                        while True:
+                            raise_if_cancelled(cancel_callback)
+                            try:
+                                chunk = response.read(1024 * 1024)
+                            except http.client.IncompleteRead as exc:
+                                chunk = exc.partial
+                                last_network_error = exc
+                            if not chunk:
+                                break
+                            if downloaded == 0:
+                                first_chunk_is_media = _looks_like_media(chunk)
+                            file_obj.write(chunk)
+                            downloaded += len(chunk)
+                            elapsed = max(time.monotonic() - start_time, 0.001)
+                            speed = downloaded / elapsed
+                            eta = (total - downloaded) / speed if total and speed else 0
+                            progress_callback(
+                                {
+                                    "status": "downloading",
+                                    "filename": str(target),
+                                    "downloaded_bytes": downloaded,
+                                    "total_bytes": total,
+                                    "_speed_str": _format_speed(speed),
+                                    "_eta_str": _format_eta(eta),
+                                }
+                            )
+                            if last_network_error is not None:
+                                break
+            except retryable_network_errors as exc:
+                last_network_error = exc
+
+            if total <= 0 and last_network_error is None:
+                break
+            if total > 0 and downloaded >= total:
+                break
+            if attempts >= max_attempts:
+                detail = f"，最后错误：{last_network_error}" if last_network_error else ""
+                raise RuntimeError(
+                    f"抖音视频下载不完整：已收到 {downloaded} / {total or '未知'} 字节，"
+                    f"多次断点续传仍未完成{detail}。"
+                )
+            if downloaded <= before_request and last_network_error is None:
+                raise RuntimeError("抖音视频下载提前结束，续传时没有收到新数据。")
+
+            progress_callback(
+                {
+                    "status": "retrying",
+                    "reason": f"抖音视频连接中断，正在断点续传（{attempts + 1}/{max_attempts}）。",
+                }
+            )
+            time.sleep(min(0.25 * attempts, 1.0))
+
+        if downloaded <= 0:
+            raise RuntimeError("平台返回了空内容，没有可保存的视频流。")
+        if total and downloaded != total:
+            raise RuntimeError(f"抖音视频下载不完整：已收到 {downloaded} / {total} 字节。")
     except DownloadStopped:
+        target.unlink(missing_ok=True)
+        raise
+    except Exception:
         target.unlink(missing_ok=True)
         raise
     if downloaded < 64 * 1024 and not first_chunk_is_media:

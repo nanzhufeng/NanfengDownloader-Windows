@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -80,6 +81,20 @@ def _ffmpeg_executable(ffmpeg_dir: Path | None) -> Path | None:
     name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
     candidate = ffmpeg_dir / name
     return candidate if candidate.is_file() else None
+
+
+def _process_error_detail(stderr: str, path: Path) -> str:
+    normalized = stderr.replace(str(path), "目标文件").replace(path.as_posix(), "目标文件")
+    lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+    if not lines:
+        return "FFmpeg 未返回具体错误。"
+    error_lines = [
+        line
+        for line in lines
+        if re.search(r"error|invalid|corrupt|partial|failed|missing|incomplete", line, re.IGNORECASE)
+    ]
+    selected = error_lines[-3:] if error_lines else lines[-3:]
+    return " | ".join(selected)[-500:]
 
 
 def validate_media_file(
@@ -180,7 +195,7 @@ def validate_media_file(
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise InvalidMediaError(f"ffmpeg 无法检查下载结果完整性：{path.name}") from exc
         if scanned.returncode != 0:
-            detail = scanned.stderr.strip()[:240]
+            detail = _process_error_detail(scanned.stderr, path)
             raise InvalidMediaError(f"下载结果的数据包不完整：{path.name}。{detail}")
 
     return MediaProbe(

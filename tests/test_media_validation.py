@@ -82,6 +82,34 @@ class MediaValidationTests(unittest.TestCase):
                 with self.assertRaisesRegex(InvalidMediaError, "数据包不完整"):
                     validate_media_file(target, ffmpeg_dir)
 
+    def test_packet_scan_error_keeps_the_actual_ffmpeg_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / (("很长的文件名" * 30) + ".mp4")
+            target.write_bytes(_fake_mp4_bytes())
+            ffmpeg_dir = Path(temp_dir) / "ffmpeg"
+            ffmpeg_dir.mkdir()
+            (ffmpeg_dir / "ffprobe.exe").touch()
+            (ffmpeg_dir / "ffmpeg.exe").touch()
+            probe_completed = SimpleNamespace(
+                returncode=0,
+                stdout='{"format":{"format_name":"mov,mp4","duration":"120.0","size":"152"}}',
+                stderr="",
+            )
+            scan_completed = SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr=f"{target}: " + ("x" * 400) + "\nInvalid data found when processing input",
+            )
+
+            with patch(
+                "app.media_validation.subprocess.run",
+                side_effect=[probe_completed, scan_completed],
+            ):
+                with self.assertRaises(InvalidMediaError) as caught:
+                    validate_media_file(target, ffmpeg_dir)
+
+            self.assertIn("Invalid data found when processing input", str(caught.exception))
+
     def test_invalid_new_file_is_removed_before_success(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "fake.mp4"
