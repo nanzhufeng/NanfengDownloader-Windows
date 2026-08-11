@@ -10,9 +10,9 @@
 
 ## 下载安装
 
-前往 [v2026.08.11 正式版](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.11-windows) 下载 `NanfengDownloader-Windows-v2026.08.11-Setup.exe`。
+当前可下载正式版为 [v2026.08.10](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.10-windows)。`v2026.08.11-windows` 已完成本地安装验证，待 GitHub 上传链路恢复后发布；请勿使用不存在的 Release 链接。
 
-SHA-256：`F4D06BE6835A7EA2E12F46B7DE894BD3F2FEFF078D4B01103B032A356CBD8B59`。安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
+安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
 ## 能力边界
 
