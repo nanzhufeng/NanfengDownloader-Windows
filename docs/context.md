@@ -106,21 +106,22 @@ CleanVideoDownloader/
 
 - **已实现且单元测试通过**：72 项 `unittest` 回归测试，覆盖五平台识别、B站作者过滤与多 P 展开、小红书视频笔记解析与断点续传、Mac 抖音分享文本、TikTok 短链/作者过滤与独立登录、5个平台侧栏与登录按钮图标、连接边界提示、抖音浏览器嗅探等待、抖音连接重试与 HTTP Range 断点续传、下载速度参数、分辨率选择、YouTube 连接/公开重试、媒体完整性、停止、执行时勾选、网络恢复、逐行精确定位输出文件、定位长文件名时窗口尺寸稳定、链接输入框独立清空，以及下载完成时按本次批次突出显示成功、失败、跳过和停止数量。
 - **已构建且启动验证**：Windows PyInstaller 包可启动；成品内确认存在 FFmpeg、Node.js、PO Provider 构建文件。
-- **当前待上传发布候选**：`v2026.08.11-windows` 已完成 Inno Setup 7 x64 构建、静默安装、运行、卸载和发布合同验证，包含逐行定位长文件名时窗口尺寸稳定、抖音断点续传加强，以及下载完成时成功/失败结果的强调提示；GitHub 大文件上传受当前代理 EOF 阻塞，暂未创建正式 Release。
+- **已发布 Windows 安装包**：`v2026.08.11-windows` 已通过 GitHub Actions 的 72 项测试、PyInstaller、Inno Setup 7 x64 构建、随包 Node.js 校验与远端资产摘要核对；本地同版本候选已完成静默安装、运行和卸载验证。包含逐行定位长文件名时窗口尺寸稳定、抖音断点续传加强，以及下载完成时成功/失败结果的强调提示。
 - **真实服务基线已建立**：YouTube/抖音单视频实际下载和 ffprobe 验证通过，YouTube 频道与抖音作者目录语义通过；详见 `docs/verification/windows-real-regression-20260718.md`。
 - **新增平台真实验证**：B站和小红书各完成一个长视频、一个短视频的实际下载，均通过 FFprobe 和 FFmpeg 全数据包扫描；B站 UP 主空间浏览器回退已读取同一主体作品。小红书作者列表仍需在软件内完成登录后做最终真实验收；详见 `docs/verification/bilibili-xiaohongshu-regression-20260726.md`。
 - **TikTok 与 Mac 抖音输入验证**：TikTok 作者页严格同主体，34 秒和 63 秒长短视频均完成实际下载及媒体扫描；Mac 抖音完整分享文案成功解析为单作品。详见 `docs/verification/tiktok-mac-douyin-regression-20260801.md`。
 
 最新 Windows 发布包：
 
-- 已验证待上传资产：`NanfengDownloader-Windows-v2026.08.11-Setup.exe`
-- SHA-256：`F4D06BE6835A7EA2E12F46B7DE894BD3F2FEFF078D4B01103B032A356CBD8B59`
+- GitHub Release 资产：`NanfengDownloader-Windows-v2026.08.11-Setup.exe`
+- 大小：`98,115,346` 字节
+- SHA-256：`B7C9FC8D6C1F99F72D353BFC3279B2B7E71F03CFD39A07144073045BF8544756`
 
 ## 6. Git 与发布边界
 
 - 当前源码根目录历史混入 Android 相关工作，且工作区长期可能处于 dirty 状态；**不要直接把该根目录推送到 Windows 发布仓库**。
 - Windows 发布使用独立仓库：`D:\CodexProjects\NanfengDownloader-Windows`。
-- 当前 GitHub Release 标签：`v2026.08.10-windows`；`v2026.08.11-windows` 待网络恢复后上传。
+- 当前 GitHub Release 标签：`v2026.08.11-windows`；旧 `v2026.08.10-windows` 已在新资产校验后删除。
 - Windows 发布仓库：<https://github.com/nanzhufeng/NanfengDownloader-Windows>（私有）。
 - 每次发布：运行测试 → PyInstaller 清洁构建 → 默认用 Inno Setup 7 x64 生成 `*-Windows-*-Setup.exe` → 静默安装、依赖、启动和卸载验证 → 计算 SHA-256 → 提交并推送 Windows 源码 → 创建 Release → 核对远端大小和摘要 → 新资产确认后再删除旧 Release。Inno Setup 6 只作为兼容回退。
 

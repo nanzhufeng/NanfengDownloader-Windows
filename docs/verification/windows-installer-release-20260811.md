@@ -17,10 +17,18 @@
 - 安装后的应用：持续运行超过 8 秒。
 - 隔离静默卸载：通过，测试安装目录已移除。
 
-## 资产
+## 本地候选资产
 
 - 大小：`144,098,506` 字节。
 - SHA-256：`F4D06BE6835A7EA2E12F46B7DE894BD3F2FEFF078D4B01103B032A356CBD8B59`。
+
+## GitHub 正式发布资产
+
+- 云端构建：GitHub Actions `31512935513`，成功执行 72 项测试、PyInstaller、Inno Setup 7 x64 和随包 `_internal/tools/node/node.exe` 校验。
+- Release：`v2026.08.11-windows`。
+- 大小：`98,115,346` 字节。
+- SHA-256：`B7C9FC8D6C1F99F72D353BFC3279B2B7E71F03CFD39A07144073045BF8544756`。
+- 旧 `v2026.08.10-windows` 已在新资产远端摘要核对完成后删除。
 
 ## 发布边界
 

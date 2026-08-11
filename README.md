@@ -10,7 +10,7 @@
 
 ## 下载安装
 
-当前可下载正式版为 [v2026.08.10](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.10-windows)。`v2026.08.11-windows` 已完成本地安装验证，待 GitHub 上传链路恢复后发布；请勿使用不存在的 Release 链接。
+当前可下载正式版为 [v2026.08.11](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.11-windows)。该 Windows 安装包由 GitHub Actions 使用 Inno Setup 7 x64 构建，并已核对远端资产摘要。
 
 安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
