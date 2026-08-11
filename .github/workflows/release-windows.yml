@@ -69,7 +69,9 @@ jobs:
           python -m PyInstaller --noconfirm --clean .\南枫下载_Windows.spec
           & $iscc.FullName .\packaging\windows\NanfengDownloader.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
-          $bundledNode = Get-ChildItem .\dist\南枫下载\tools\node\node.exe -ErrorAction SilentlyContinue
+          # PyInstaller onedir data files live under _internal. Keep this check
+          # aligned with the runtime lookup so a cloud Release cannot omit Node.
+          $bundledNode = Get-ChildItem .\dist\南枫下载\_internal\tools\node\node.exe -ErrorAction SilentlyContinue
           if (-not $bundledNode) { throw 'Bundled Node.js runtime is missing.' }
 
       - name: Publish release asset
