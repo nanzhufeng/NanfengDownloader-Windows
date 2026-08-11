@@ -12,7 +12,7 @@
 
 前往 [v2026.08.11 正式版](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.11-windows) 下载 `NanfengDownloader-Windows-v2026.08.11-Setup.exe`。
 
-SHA-256：`4DA39B65282BBFF3295A16FE7F50E757F4E6C9A13C824F24BD56C04968A97091`。安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
+SHA-256：`F4D06BE6835A7EA2E12F46B7DE894BD3F2FEFF078D4B01103B032A356CBD8B59`。安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
 ## 能力边界
 
@@ -107,6 +107,6 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1
 
 构建脚本默认使用 Inno Setup 7 x64；仅在 7 未安装时回退到 Inno Setup 6。
 
-安装程序输出到 `installer\NanfengDownloader-Windows-v2026.08.11-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
+安装程序输出到 `installer\releases\NanfengDownloader-Windows-v2026.08.11-Setup.exe`。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料。
 
 打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。

@@ -115,7 +115,7 @@ CleanVideoDownloader/
 
 - GitHub Release：<https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.11-windows>
 - 资产：`NanfengDownloader-Windows-v2026.08.11-Setup.exe`
-- SHA-256：`4DA39B65282BBFF3295A16FE7F50E757F4E6C9A13C824F24BD56C04968A97091`
+- SHA-256：`F4D06BE6835A7EA2E12F46B7DE894BD3F2FEFF078D4B01103B032A356CBD8B59`
 
 ## 6. Git 与发布边界
 
