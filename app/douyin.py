@@ -58,6 +58,9 @@ IMAGE_URL_HINTS = (
 )
 
 DOUYIN_DOWNLOAD_MAX_ATTEMPTS = 8
+# 某些 CDN 会在 Content-Length 不可信时提前结束响应，只有完整扫描后才会暴露。
+# 仅对这一类已确认的不完整媒体刷新一次真实地址并从头重下，避免盲目重复请求。
+DOUYIN_PACKET_VALIDATION_ATTEMPTS = 2
 NON_WORK_MEDIA_HINTS = (
     "douyin_pc_client",
     "bytednsdoc.com",
@@ -1313,6 +1316,45 @@ def _validate_douyin_output(target: Path, options: DownloadOptions) -> None:
         raise RuntimeError(f"抖音下载结果校验失败：{exc}") from exc
 
 
+def _is_retriable_packet_validation_error(error: BaseException) -> bool:
+    """仅把 FFmpeg 已确认的截断媒体作为刷新地址后重试的条件。"""
+    return "抖音下载结果校验失败：下载结果的数据包不完整" in str(error)
+
+
+def _download_video_media_once(
+    info: DouyinInfo,
+    target: Path,
+    options: DownloadOptions,
+    progress_callback: ProgressCallback,
+    cancel_callback: CancelCallback | None = None,
+) -> tuple[Path, list[Path]]:
+    """下载一次普通视频；完整性校验由调用方统一完成。"""
+    if not info.video_url:
+        raise RuntimeError("这个抖音作品没有可下载的视频流。")
+
+    temp_files: list[Path] = []
+    audio_only_done = False
+    if info.audio_url and options.quality != "仅音频 MP3":
+        temp_video = target.with_suffix(".video.mp4")
+        temp_audio = target.with_suffix(".audio.mp4")
+        temp_files.extend([temp_video, temp_audio])
+        _download_binary(info.video_url, temp_video, options, progress_callback, cancel_callback)
+        _download_binary(info.audio_url, temp_audio, options, progress_callback, cancel_callback)
+        target = _merge_video_audio(temp_video, temp_audio, target, options, cancel_callback)
+    elif info.audio_url and options.quality == "仅音频 MP3":
+        temp_audio = target.with_suffix(".audio.mp4")
+        temp_files.append(temp_audio)
+        _download_binary(info.audio_url, temp_audio, options, progress_callback, cancel_callback)
+        target = _extract_audio(temp_audio, options, cancel_callback)
+        audio_only_done = True
+    else:
+        _download_binary(info.video_url, target, options, progress_callback, cancel_callback)
+
+    if options.quality == "仅音频 MP3" and not audio_only_done:
+        target = _extract_audio(target, options, cancel_callback)
+    return target, temp_files
+
+
 def _extract_audio(source: Path, options: DownloadOptions, cancel_callback: CancelCallback | None = None) -> Path:
     ffmpeg = _ffmpeg_executable(options)
     target = source.with_suffix(".mp3")
@@ -1388,42 +1430,51 @@ def download_douyin_url(
         _validate_douyin_output(generated, options)
         return DownloadResult(files=[generated])
 
-    if not info.video_url:
-        raise RuntimeError("这个抖音作品没有可下载的视频流。")
+    last_packet_error: RuntimeError | None = None
+    for validation_attempt in range(DOUYIN_PACKET_VALIDATION_ATTEMPTS):
+        current_info = info
+        if validation_attempt:
+            # 抖音下载地址带短时签名；重新读取作品页，避免重复请求已截断的旧 CDN 地址。
+            progress_callback(
+                {
+                    "status": "retrying",
+                    "reason": "视频数据不完整，正在刷新抖音下载地址后重新下载（2/2）。",
+                }
+            )
+            time.sleep(0.8)
+            current_info = _fetch_douyin_info(url, options)
 
-    temp_files: list[Path] = []
+        temp_files: list[Path] = []
+        current_target = target
+        try:
+            raise_if_cancelled(cancel_callback)
+            current_target, temp_files = _download_video_media_once(
+                current_info,
+                current_target,
+                options,
+                progress_callback,
+                cancel_callback,
+            )
+            if not current_target.exists() or current_target.stat().st_size == 0:
+                raise RuntimeError("抖音下载流程结束，但没有生成有效文件。")
+            _validate_douyin_output(current_target, options)
+        except DownloadStopped:
+            for file_path in [current_target, *temp_files]:
+                file_path.unlink(missing_ok=True)
+            raise
+        except RuntimeError as exc:
+            for file_path in [current_target, *temp_files]:
+                file_path.unlink(missing_ok=True)
+            if not _is_retriable_packet_validation_error(exc):
+                raise
+            last_packet_error = exc
+            if validation_attempt + 1 >= DOUYIN_PACKET_VALIDATION_ATTEMPTS:
+                raise RuntimeError(
+                    "抖音视频多次重新下载后仍不完整。请稍后重新读取该作品后重试。"
+                ) from exc
+            continue
 
-    try:
-        raise_if_cancelled(cancel_callback)
-        audio_only_done = False
-        if info.audio_url and options.quality != "仅音频 MP3":
-            temp_video = target.with_suffix(".video.mp4")
-            temp_audio = target.with_suffix(".audio.mp4")
-            temp_files.extend([temp_video, temp_audio])
-            _download_binary(info.video_url, temp_video, options, progress_callback, cancel_callback)
-            _download_binary(info.audio_url, temp_audio, options, progress_callback, cancel_callback)
-            target = _merge_video_audio(temp_video, temp_audio, target, options, cancel_callback)
-        elif info.audio_url and options.quality == "仅音频 MP3":
-            temp_audio = target.with_suffix(".audio.mp4")
-            temp_files.append(temp_audio)
-            _download_binary(info.audio_url, temp_audio, options, progress_callback, cancel_callback)
-            temp_video = temp_audio
-            target = _extract_audio(temp_video, options, cancel_callback)
-            audio_only_done = True
-        else:
-            _download_binary(info.video_url, target, options, progress_callback, cancel_callback)
+        progress_callback({"status": "finished", "filename": str(current_target)})
+        return DownloadResult(files=[current_target])
 
-        if options.quality == "仅音频 MP3" and not audio_only_done:
-            target = _extract_audio(target, options, cancel_callback)
-    except DownloadStopped:
-        for file_path in [target, *temp_files]:
-            file_path.unlink(missing_ok=True)
-        raise
-
-    if not target.exists() or target.stat().st_size == 0:
-        raise RuntimeError("抖音下载流程结束，但没有生成有效文件。")
-
-    _validate_douyin_output(target, options)
-
-    progress_callback({"status": "finished", "filename": str(target)})
-    return DownloadResult(files=[target])
+    raise RuntimeError("抖音视频重新下载流程异常结束。") from last_packet_error
