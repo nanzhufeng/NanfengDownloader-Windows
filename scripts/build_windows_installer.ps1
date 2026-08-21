@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [string]$Version,
     [switch]$SkipTests,
     [switch]$CheckCompilerOnly
 )
@@ -23,6 +24,14 @@ try {
         return
     }
 
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        throw "Version is required. Example: -Version 2026.08.21"
+    }
+    $metadata = python scripts\release_metadata.py --version $Version --format json | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release version is invalid."
+    }
+
     if (-not $SkipTests) {
         python -m unittest discover -s tests -v
         if ($LASTEXITCODE -ne 0) {
@@ -42,12 +51,12 @@ try {
         throw "PyInstaller build failed."
     }
 
-    & $iscc "packaging\windows\NanfengDownloader.iss"
+    & $iscc "/DMyAppVersion=$($metadata.app_version)" "/DMyVersionInfo=$($metadata.version_info)" "/DMyOutputVersion=$($metadata.output_version)" "packaging\windows\NanfengDownloader.iss"
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup build failed."
     }
 
-    $installer = Join-Path $projectRoot "installer\releases\NanfengDownloader-Windows-v2026.08.11-Setup.exe"
+    $installer = Join-Path $projectRoot ("installer\releases\{0}" -f $metadata.installer_name)
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "Installer was not created: $installer"
     }

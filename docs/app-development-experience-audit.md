@@ -1,7 +1,7 @@
 # 南枫下载：App 开发经验正式审计
 
 > 审计日期：2026-07-18  
-> 项目范围：`D:\CodexProjects\江湖工具箱\CleanVideoDownloader` 的 Windows 桌面版  
+> 项目范围：南枫下载 Windows 桌面版；本文保留 2026-07-18 的经验审计基线，当前源码事实请以 `docs/context.md` 为准。
 > 执行模式：正式沉淀  
 > 本文保存项目证据与项目风险；跨项目规则的唯一入口为用户级 Skill `app-development-experience-distillation`。
 
@@ -16,7 +16,7 @@
 - 发布资产：`NanfengDownloader-Windows-v2026.07.19-Setup.exe`。
 - SHA-256：`4E1E170B0301131412B660B7B3CB572DC77177FAC3A40C28706AD1AB4E235355`。
 - Windows Release 标签提交：`168753e docs: add Windows v2026.07.19 release notes`。
-- 当前源码 Git：根目录正确，分支为 `master`，最新提交是 Android 工作台文档提交；工作区存在尚未提交的 Windows 改动，因此本次不提交、不清理、不重置。
+- 当时的源码根包含 Android 工作台历史；后续 Windows 维护已迁移到独立仓库 `D:\CodexProjects\NanfengDownloader-Windows`，不应把这条历史描述当成当前工作区状态。
 
 明确排除：
 

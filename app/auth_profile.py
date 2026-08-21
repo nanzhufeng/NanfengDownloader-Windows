@@ -293,7 +293,13 @@ def _has_platform_cookie_file() -> bool:
     return any(platform_cookie_file(platform).exists() for platform in SUPPORTED_LOGIN_PLATFORMS)
 
 
-def cookie_jar_from_auth_profile() -> http.cookiejar.CookieJar:
+def cookie_jar_from_auth_profile(platform: str | None = None) -> http.cookiejar.CookieJar:
+    if platform in SUPPORTED_LOGIN_PLATFORMS:
+        cookie_file = platform_cookie_file(platform)
+        if cookie_file.exists():
+            jar = http.cookiejar.MozillaCookieJar(str(cookie_file))
+            jar.load(ignore_discard=True, ignore_expires=True)
+            return jar
     if _has_platform_cookie_file():
         _merge_cookie_files()
     cookie_file = auth_cookie_file()
@@ -330,7 +336,12 @@ def cookie_jar_from_auth_profile() -> http.cookiejar.CookieJar:
     return jar
 
 
-def export_auth_cookies_txt() -> Path:
+def export_auth_cookies_txt(platform: str | None = None) -> Path:
+    """优先返回目标平台独立 Cookie，兼容旧版合并文件。"""
+    if platform in SUPPORTED_LOGIN_PLATFORMS:
+        cookie_file = platform_cookie_file(platform)
+        if cookie_file.exists():
+            return cookie_file
     if _has_platform_cookie_file():
         return _merge_cookie_files()
     cookie_file = auth_cookie_file()

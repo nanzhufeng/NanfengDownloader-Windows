@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.auth_profile import _write_cookies_txt, has_youtube_account_cookies
+from app.auth_profile import _write_cookies_txt, export_auth_cookies_txt, has_youtube_account_cookies
 from app.downloader import (
     friendly_youtube_auth_error,
     is_youtube_auth_error_text,
@@ -69,6 +69,18 @@ class YouTubeAuthCookieTests(unittest.TestCase):
 
             cookie_line = target.read_text(encoding="utf-8").splitlines()[-1]
             self.assertEqual(cookie_line.split("\t")[4], "0")
+
+    def test_platform_export_does_not_merge_unrelated_platform_cookies(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            youtube_file = root / "youtube.txt"
+            bilibili_file = root / "bilibili.txt"
+            youtube_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+            bilibili_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+
+            with patch("app.auth_profile.platform_cookie_file", side_effect=lambda platform: root / f"{platform}.txt"):
+                self.assertEqual(export_auth_cookies_txt("youtube"), youtube_file)
+                self.assertFalse((root / "cookies.txt").exists())
 
 
 class YouTubeAuthErrorTests(unittest.TestCase):

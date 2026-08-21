@@ -134,7 +134,7 @@ def _playwright_cookies(options: Any) -> list[dict[str, Any]]:
     if options.cookie_mode != AUTH_COOKIE_MODE:
         return []
     try:
-        jar: http.cookiejar.CookieJar = cookie_jar_from_auth_profile()
+        jar: http.cookiejar.CookieJar = cookie_jar_from_auth_profile("bilibili")
     except Exception:
         return []
     cookies: list[dict[str, Any]] = []
@@ -261,7 +261,7 @@ def discover_bilibili_items(url: str, options: Any, max_items: int = 500) -> lis
     if options.ffmpeg_dir:
         ydl_options["ffmpeg_location"] = str(options.ffmpeg_dir)
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        ydl_options["cookiefile"] = str(export_auth_cookies_txt())
+        ydl_options["cookiefile"] = str(export_auth_cookies_txt("bilibili"))
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         ydl_options["cookiesfrombrowser"] = (options.cookie_mode.lower(),)
     elif options.cookie_mode == "cookies.txt" and options.cookie_file:

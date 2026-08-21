@@ -20,12 +20,17 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertEqual(dialog.failure_card.objectName(), "DownloadSummaryFailure")
 
     def test_failed_items_use_failure_headline_and_red_count(self) -> None:
-        dialog = DownloadSummaryDialog({"完成": 2, "已跳过": 0, "失败": 1, "已停止": 1})
+        dialog = DownloadSummaryDialog(
+            {"完成": 2, "已跳过": 0, "失败": 1, "已停止": 1},
+            failure_detail="抖音视频数据不完整，已重试后仍失败。",
+        )
 
         self.assertEqual(dialog.headline_label.text(), "下载任务存在失败项")
         self.assertEqual(dialog.headline_label.objectName(), "DownloadSummaryTitleFailure")
         self.assertEqual(dialog.failure_count_label.text(), "1")
         self.assertEqual(dialog.stopped_count_label.text(), "1")
+        self.assertIsNotNone(dialog.failure_detail_label)
+        self.assertIn("已重试后仍失败", dialog.failure_detail_label.text())
 
     def test_compact_layout_uses_smaller_dialog_and_cards(self) -> None:
         dialog = DownloadSummaryDialog({"完成": 1, "已跳过": 0, "失败": 0, "已停止": 0})

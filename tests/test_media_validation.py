@@ -8,6 +8,7 @@ from app.downloader import _validated_media_files
 from app.media_validation import (
     InvalidMediaError,
     is_probable_existing_media,
+    packet_scan_timeout_seconds,
     validate_media_file,
 )
 
@@ -119,6 +120,12 @@ class MediaValidationTests(unittest.TestCase):
                 _validated_media_files([target], None)
 
             self.assertFalse(target.exists())
+
+    def test_packet_scan_timeout_scales_for_large_files_and_is_capped(self) -> None:
+        self.assertEqual(packet_scan_timeout_seconds(1), 20.0)
+        self.assertEqual(packet_scan_timeout_seconds(512 * 1024 * 1024), 20.0)
+        self.assertGreater(packet_scan_timeout_seconds(2 * 1024 * 1024 * 1024), 20.0)
+        self.assertEqual(packet_scan_timeout_seconds(100 * 1024 * 1024 * 1024), 300.0)
 
 
 if __name__ == "__main__":

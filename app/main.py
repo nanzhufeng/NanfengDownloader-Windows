@@ -87,7 +87,6 @@ NETWORK_ERROR_KEYWORDS = (
     "timed out",
     "timeout",
     "urlopen error",
-    "ssl",
     "connection",
     "connection reset",
     "connection aborted",
@@ -106,9 +105,17 @@ NETWORK_ERROR_KEYWORDS = (
     "远程主机",
 )
 
+CERTIFICATE_ERROR_KEYWORDS = (
+    "certificate_verify_failed",
+    "certificate verify failed",
+    "ssl: certificate",
+)
+
 
 def is_network_error_text(text: str) -> bool:
     lowered = text.lower()
+    if any(keyword in lowered for keyword in CERTIFICATE_ERROR_KEYWORDS):
+        return False
     return any(keyword in lowered for keyword in NETWORK_ERROR_KEYWORDS)
 
 
@@ -198,7 +205,12 @@ class CompactStatusLabel(QLabel):
 class DownloadSummaryDialog(QDialog):
     """将下载结果中的成功与失败以明确颜色和数量呈现。"""
 
-    def __init__(self, counts: dict[str, int], parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        counts: dict[str, int],
+        parent: QWidget | None = None,
+        failure_detail: str = "",
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("DownloadSummaryDialog")
         self.setWindowTitle("下载结果")
@@ -260,6 +272,14 @@ class DownloadSummaryDialog(QDialog):
         hint.setObjectName("DownloadSummaryHint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
+
+        self.failure_detail_label: QLabel | None = None
+        if failed and failure_detail:
+            self.failure_detail_label = QLabel(f"失败原因：{failure_detail[:220]}")
+            self.failure_detail_label.setObjectName("DownloadSummaryHint")
+            self.failure_detail_label.setWordWrap(True)
+            self.failure_detail_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            layout.addWidget(self.failure_detail_label)
 
         close_button = QPushButton("关闭")
         close_button.setObjectName("DownloadSummaryClose")
@@ -452,6 +472,7 @@ class MainWindow(QMainWindow):
         self.check_drag_rows: set[int] = set()
         self.row_output_files: dict[int, list[Path]] = {}
         self.download_started_at: float | None = None
+        self.latest_failure_detail = ""
         self.network_check_timer = QTimer(self)
         self.network_check_timer.setInterval(8000)
         self.network_check_timer.timeout.connect(self._start_network_check)
@@ -1521,6 +1542,8 @@ class MainWindow(QMainWindow):
             return QColor("#f1f5f9"), QColor("#475569")
         if status == "下载中":
             return QColor("#dbeafe"), QColor("#1d4ed8")
+        if status == "续传中":
+            return QColor("#ede9fe"), QColor("#6d28d9")
         if status == "等待":
             return QColor("#fef3c7"), QColor("#b45309")
         if status == "等待联网":
@@ -1712,11 +1735,24 @@ class MainWindow(QMainWindow):
             skipped += 1
         return skipped
 
-    def _existing_media_index(self, output_dir: Path) -> dict[tuple[str, str], Path]:
+    def _platform_storage_key(self, platform: str | None) -> str:
+        normalized = (platform or "").strip().casefold()
+        return {
+            "抖音": "douyin",
+            "douyin": "douyin",
+            "youtube": "youtube",
+            "哔哩哔哩": "bilibili",
+            "bilibili": "bilibili",
+            "小红书": "xiaohongshu",
+            "xiaohongshu": "xiaohongshu",
+            "tiktok": "tiktok",
+        }.get(normalized, normalized)
+
+    def _existing_media_index(self, output_dir: Path) -> dict[tuple[str, str, str], Path]:
         if not output_dir.exists():
             return {}
 
-        index: dict[tuple[str, str], Path] = {}
+        index: dict[tuple[str, str, str], Path] = {}
         for file_path in output_dir.rglob("*"):
             if not file_path.is_file() or file_path.suffix.lower() not in MEDIA_FILE_SUFFIXES:
                 continue
@@ -1727,11 +1763,18 @@ class MainWindow(QMainWindow):
             if not stem_key:
                 continue
             creator_key = self._normalize_existing_lookup_text(file_path.parent.name)
-            index.setdefault((creator_key, stem_key), file_path.resolve())
-            index.setdefault(("", stem_key), file_path.resolve())
+            try:
+                platform_dir = file_path.relative_to(output_dir).parts[0]
+            except ValueError:
+                continue
+            platform_key = self._platform_storage_key(platform_dir)
+            if not platform_key:
+                continue
+            index.setdefault((platform_key, creator_key, stem_key), file_path.resolve())
+            index.setdefault((platform_key, "", stem_key), file_path.resolve())
         return index
 
-    def _row_existing_file(self, row: int, existing: dict[tuple[str, str], Path]) -> Path | None:
+    def _row_existing_file(self, row: int, existing: dict[tuple[str, str, str], Path]) -> Path | None:
         title_item = self.table.item(row, COL_TITLE)
         if not title_item:
             return None
@@ -1741,9 +1784,13 @@ class MainWindow(QMainWindow):
 
         creator = self._row_creator_name(row)
         creator_key = self._normalize_existing_lookup_text(safe_path_name(creator)) if creator else ""
+        platform_item = self.table.item(row, COL_PLATFORM)
+        platform_key = self._platform_storage_key(platform_item.text() if platform_item else None)
+        if not platform_key:
+            return None
         if creator_key:
-            return existing.get((creator_key, title_key))
-        return existing.get(("", title_key))
+            return existing.get((platform_key, creator_key, title_key))
+        return existing.get((platform_key, "", title_key))
 
     def _normalize_existing_lookup_text(self, text: str | None) -> str:
         cleaned = text or ""
@@ -1774,6 +1821,7 @@ class MainWindow(QMainWindow):
 
         self.active_download_rows = set(selected_rows)
         self.youtube_auth_blocked = False
+        self.latest_failure_detail = ""
         skipped = self._fast_skip_existing_rows(selected_rows, options.output_dir)
         items_rows = [
             row
@@ -1909,12 +1957,19 @@ class MainWindow(QMainWindow):
             self._set_cell(row, COL_TITLE, Path(str(info["filename"])).name)
 
         if status == "downloading":
+            self._set_row_status(row, "下载中")
             total = info.get("total_bytes") or info.get("total_bytes_estimate") or 0
             downloaded = info.get("downloaded_bytes") or 0
             percent = int(downloaded * 100 / total) if total else 0
             self._set_cell(row, COL_PROGRESS, f"{percent}%")
             self._set_cell(row, COL_SPEED, info.get("_speed_str", "-").strip())
             self._set_cell(row, COL_ETA, info.get("_eta_str", "-").strip())
+        elif status == "retrying":
+            reason = str(info.get("reason") or "正在重新建立下载连接。")
+            self._set_row_status(row, "续传中")
+            self._set_cell(row, COL_SPEED, "正在续传")
+            self._set_cell(row, COL_ETA, "重新连接")
+            self.status_label.setText(reason)
         elif status == "finished":
             self._set_cell(row, COL_PROGRESS, "处理中")
             self._set_cell(row, COL_SPEED, "-")
@@ -1971,6 +2026,8 @@ class MainWindow(QMainWindow):
             return
         self._set_row_status(row, "失败")
         self._set_cell(row, COL_TITLE, error[:180])
+        self.latest_failure_detail = error
+        self.status_label.setText(f"下载失败：{error[:180]}")
         self._update_main_progress()
 
     @Slot(int)
@@ -2025,7 +2082,7 @@ class MainWindow(QMainWindow):
             status = status_item.text() if status_item else ""
             if status in {"完成", "已跳过", "失败", "已停止"}:
                 progress_units += 1.0
-            elif status == "下载中":
+            elif status in {"下载中", "续传中"}:
                 progress_units += self._row_progress_ratio(row)
         percent = int(progress_units * 100 / total)
         self.main_progress.setValue(max(0, min(100, percent)))
@@ -2044,7 +2101,11 @@ class MainWindow(QMainWindow):
         return counts
 
     def _show_download_summary(self, counts: dict[str, int] | None = None) -> None:
-        DownloadSummaryDialog(counts or self._download_summary_counts(), self).exec()
+        DownloadSummaryDialog(
+            counts or self._download_summary_counts(),
+            self,
+            failure_detail=self.latest_failure_detail,
+        ).exec()
 
     def _download_summary_text(self) -> str:
         counts = self._download_summary_counts()

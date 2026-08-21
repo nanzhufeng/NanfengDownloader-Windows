@@ -97,6 +97,13 @@ def _process_error_detail(stderr: str, path: Path) -> str:
     return " | ".join(selected)[-500:]
 
 
+def packet_scan_timeout_seconds(file_size: int, minimum_seconds: float = 20.0) -> float:
+    """按文件体积放宽完整性扫描时间，避免长视频被固定 20 秒误判。"""
+    size_window = 512 * 1024 * 1024
+    extra_windows = max(0, (max(0, file_size) - 1) // size_window)
+    return min(300.0, max(minimum_seconds, minimum_seconds + extra_windows * 20.0))
+
+
 def validate_media_file(
     path: Path,
     ffmpeg_dir: Path | None = None,
@@ -188,7 +195,7 @@ def validate_media_file(
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=timeout_seconds,
+                timeout=packet_scan_timeout_seconds(size, timeout_seconds),
                 check=False,
                 creationflags=creationflags,
             )

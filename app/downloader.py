@@ -108,6 +108,16 @@ def detect_platform(url: str) -> str:
     return "未知"
 
 
+def _auth_platform_for_url(url: str) -> str | None:
+    """只把目标平台自己的软件内 Cookie 传给 yt-dlp。"""
+    platform = detect_platform(url)
+    return {
+        "YouTube": "youtube",
+        "哔哩哔哩": "bilibili",
+        "TikTok": "tiktok",
+    }.get(platform)
+
+
 def find_ffmpeg_dir(project_root: Path) -> Path | None:
     """优先复用当前工具包里的 FFmpeg，找不到时交给系统 PATH。"""
     configured = os.environ.get("NANFENG_FFMPEG_DIR")
@@ -216,6 +226,7 @@ def build_ydl_options(
     options: DownloadOptions,
     progress_callback: ProgressCallback,
     cancel_callback: CancelCallback | None = None,
+    auth_platform: str | None = None,
 ) -> dict[str, Any]:
     def checked_progress(info: dict[str, Any]) -> None:
         raise_if_cancelled(cancel_callback)
@@ -265,7 +276,7 @@ def build_ydl_options(
         ]
 
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        ydl_options["cookiefile"] = str(export_auth_cookies_txt())
+        ydl_options["cookiefile"] = str(export_auth_cookies_txt(auth_platform))
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         ydl_options["cookiesfrombrowser"] = (options.cookie_mode.lower(),)
     elif options.cookie_mode == "cookies.txt" and options.cookie_file:
@@ -296,6 +307,29 @@ def _apply_bilibili_page_download_options(
             output_template.with_name(f"P{page_number:02d} {output_template.name}")
         )
     ydl_options["noplaylist"] = True
+
+
+def _is_single_media_url(url: str) -> bool:
+    """明确的单视频地址不得悄悄扩展成整张播放列表。"""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    path = parsed.path.lower()
+    if host.endswith("youtube.com"):
+        return (path == "/watch" and bool(parse_qs(parsed.query).get("v"))) or path.startswith("/shorts/")
+    if host == "youtu.be" or host.endswith(".youtu.be"):
+        return bool(path.strip("/"))
+    if host.endswith("bilibili.com"):
+        return "/video/" in path or "/bangumi/play/" in path
+    if host == "b23.tv" or host.endswith(".b23.tv"):
+        return bool(path.strip("/"))
+    if host.endswith("tiktok.com"):
+        return "/video/" in path
+    return False
+
+
+def _apply_single_media_download_options(url: str, ydl_options: dict[str, Any]) -> None:
+    if _is_single_media_url(url):
+        ydl_options["noplaylist"] = True
 
 
 def _is_fragment_rate_limit_error(exc: Exception) -> bool:
@@ -524,7 +558,13 @@ def download_url(
     options.output_dir.mkdir(parents=True, exist_ok=True)
     before = _snapshot_files(options.output_dir)
 
-    ydl_options = build_ydl_options(options, progress_callback, cancel_callback)
+    ydl_options = build_ydl_options(
+        options,
+        progress_callback,
+        cancel_callback,
+        auth_platform=_auth_platform_for_url(url),
+    )
+    _apply_single_media_download_options(url, ydl_options)
     _apply_bilibili_page_download_options(url, ydl_options)
     try:
         for attempt in range(YOUTUBE_PUBLIC_REQUEST_ATTEMPTS):

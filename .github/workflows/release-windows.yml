@@ -4,14 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to build and publish
+        description: New release tag in vYYYY.MM.DD-windows form; existing tags are rejected
         required: true
-        default: v2026.08.11-windows
-      replace_release:
-        description: Replace the draft for this tag only
-        required: true
-        type: boolean
-        default: true
 
 permissions:
   contents: write
@@ -40,7 +34,22 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt PyInstaller
+          python -m pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Validate new release version
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $metadata = python scripts\release_metadata.py --tag "$env:RELEASE_TAG" --format json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Release tag is invalid.' }
+          gh release view $env:RELEASE_TAG 2>$null
+          if ($LASTEXITCODE -eq 0) { throw "Release $env:RELEASE_TAG already exists. Use a new version; published releases are not overwritten." }
+          "RELEASE_OUTPUT_VERSION=$($metadata.output_version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_APP_VERSION=$($metadata.app_version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_VERSION_INFO=$($metadata.version_info)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RELEASE_INSTALLER_NAME=$($metadata.installer_name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build bundled YouTube compatibility provider
         shell: pwsh
@@ -75,7 +84,7 @@ jobs:
           $iscc = Get-ChildItem 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe','C:\Program Files\Inno Setup 7\ISCC.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $iscc) { throw 'Inno Setup 7 compiler was not found.' }
           python -m PyInstaller --noconfirm --clean .\南枫下载_Windows.spec
-          & $iscc.FullName .\packaging\windows\NanfengDownloader.iss
+          & $iscc.FullName "/DMyAppVersion=$env:RELEASE_APP_VERSION" "/DMyVersionInfo=$env:RELEASE_VERSION_INFO" "/DMyOutputVersion=$env:RELEASE_OUTPUT_VERSION" .\packaging\windows\NanfengDownloader.iss
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           # PyInstaller onedir data files live under _internal. Keep this check
           # aligned with the runtime lookup so a cloud Release cannot omit Node.
@@ -91,13 +100,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          $installer = Get-ChildItem .\installer\releases\NanfengDownloader-Windows-*-Setup.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if (-not $installer) { throw 'Installer was not created.' }
+          $installer = Get-Item (Join-Path '.\installer\releases' $env:RELEASE_INSTALLER_NAME) -ErrorAction Stop
           $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
           $notes = "Windows 安装包，使用 Inno Setup 7 x64 构建。`n`nSHA-256: ``$hash``"
-          gh release view $env:RELEASE_TAG 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $env:RELEASE_TAG --draft --target $env:GITHUB_SHA --title "南枫下载 Windows $env:RELEASE_TAG" --notes $notes
-          }
-          gh release upload $env:RELEASE_TAG $installer.FullName --clobber
+          gh release create $env:RELEASE_TAG --draft --target $env:GITHUB_SHA --title "南枫下载 Windows $env:RELEASE_TAG" --notes $notes
+          gh release upload $env:RELEASE_TAG $installer.FullName
           gh release edit $env:RELEASE_TAG --draft=false --title "南枫下载 Windows $env:RELEASE_TAG" --notes $notes

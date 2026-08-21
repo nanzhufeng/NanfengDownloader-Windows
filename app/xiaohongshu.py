@@ -186,7 +186,7 @@ def _cookie_jar(options: Any) -> http.cookiejar.CookieJar | None:
     from .auth_profile import AUTH_COOKIE_MODE, cookie_jar_from_auth_profile
 
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        return cookie_jar_from_auth_profile()
+        return cookie_jar_from_auth_profile("xiaohongshu")
     if options.cookie_mode == "cookies.txt" and options.cookie_file:
         jar = http.cookiejar.MozillaCookieJar(str(options.cookie_file))
         jar.load(ignore_discard=True, ignore_expires=True)

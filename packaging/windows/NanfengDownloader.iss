@@ -1,5 +1,13 @@
 ﻿#define MyAppName "南枫下载"
-#define MyAppVersion "2026.8.11"
+#ifndef MyAppVersion
+  #error "MyAppVersion is required. Use scripts\\build_windows_installer.ps1 -Version YYYY.MM.DD."
+#endif
+#ifndef MyVersionInfo
+  #error "MyVersionInfo is required."
+#endif
+#ifndef MyOutputVersion
+  #error "MyOutputVersion is required."
+#endif
 #define MyAppPublisher "南烛枫"
 #define MyAppExeName "南枫下载.exe"
 #define MyAppSourceDir "..\..\dist\南枫下载"
@@ -18,15 +26,15 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#MyAppOutputDir}
-OutputBaseFilename=NanfengDownloader-Windows-v2026.08.11-Setup
+OutputBaseFilename=NanfengDownloader-Windows-v{#MyOutputVersion}-Setup
 SetupIconFile=..\..\app\assets\nanzhufeng-icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=force
+CloseApplications=no
 RestartApplications=no
-VersionInfoVersion=2026.8.11.0
+VersionInfoVersion={#MyVersionInfo}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Windows 安装程序
 VersionInfoProductName={#MyAppName}

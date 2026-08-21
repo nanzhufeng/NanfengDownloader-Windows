@@ -91,7 +91,7 @@ def is_douyin_url(url: str) -> bool:
 
 def _build_cookie_jar(options: DownloadOptions) -> http.cookiejar.CookieJar | None:
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        return cookie_jar_from_auth_profile()
+        return cookie_jar_from_auth_profile("douyin")
     if options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         try:
             return extract_cookies_from_browser(options.cookie_mode.lower())

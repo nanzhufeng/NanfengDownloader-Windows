@@ -9,6 +9,7 @@ from app.downloader import (
     DownloadOptions,
     _download_with_adaptive_concurrency,
     _is_fragment_rate_limit_error,
+    _apply_single_media_download_options,
     build_format_selector,
     build_format_sort,
     build_youtube_runtime_options,
@@ -186,6 +187,17 @@ class DownloadSpeedOptionsTests(unittest.TestCase):
             )
 
         self.assertEqual(run_download.call_count, 1)
+
+    def test_single_video_urls_do_not_expand_to_playlists(self) -> None:
+        cases = (
+            "https://www.youtube.com/watch?v=video-id&list=playlist-id",
+            "https://www.bilibili.com/video/BV1xx411c7mD?p=2",
+            "https://www.tiktok.com/@creator/video/123456789",
+        )
+        for url in cases:
+            ydl_options = {"noplaylist": False}
+            _apply_single_media_download_options(url, ydl_options)
+            self.assertTrue(ydl_options["noplaylist"], url)
 
 
 if __name__ == "__main__":
