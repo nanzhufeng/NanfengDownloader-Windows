@@ -393,11 +393,6 @@ class AppSettingsDialog(QDialog):
         options_layout.addWidget(self.auto_reveal_output_checkbox)
         layout.addWidget(options_panel)
 
-        hint = QLabel("提示：这些选项会在下次启动时继续生效；自动打开会定位并选中最新完成的视频。")
-        hint.setObjectName("AppSettingsHint")
-        hint.setWordWrap(True)
-        layout.addWidget(hint)
-
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel_button = QPushButton("取消")
@@ -915,7 +910,7 @@ class MainWindow(QMainWindow):
         self.status_label.setObjectName("Status")
         self.copy_tip_label = QLabel()
         self.copy_tip_label.setObjectName("CopyToast")
-        self.copy_tip_label.setFixedSize(150, 30)
+        self.copy_tip_label.setFixedSize(190, 30)
         self.copy_tip_label.setProperty("active", "false")
         self.load_more_button = QPushButton("加载更多视频")
         self.load_more_button.setObjectName("LoadMoreButton")
@@ -1501,13 +1496,9 @@ class MainWindow(QMainWindow):
         self.settings.sync()
 
     def _show_settings_saved_message(self) -> None:
-        """在主窗口底部状态栏反馈保存结果，不额外弹出干扰提示。"""
-        sound = "开" if self.completion_sound_enabled else "关"
-        summary = "开" if self.result_summary_enabled else "关"
-        auto_reveal = "开" if self.auto_reveal_output_enabled else "关"
-        self.status_label.setText(
-            f"设置已保存：提示音{sound}；完成提示{summary}；自动定位{auto_reveal}。"
-        )
+        """在底部状态栏显示短暂的保存确认，不覆盖当前任务状态。"""
+        self._set_copy_tip("设置已保存", active=True)
+        QTimer.singleShot(2400, lambda: self._set_copy_tip("", active=False))
 
     def _play_completion_sound_if_enabled(self) -> None:
         if self.completion_sound_enabled:

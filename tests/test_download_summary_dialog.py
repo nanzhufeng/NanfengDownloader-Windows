@@ -102,9 +102,10 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             finally:
                 reloaded.close()
 
-    def test_saving_preferences_shows_the_saved_state_in_the_bottom_status_bar(self) -> None:
+    def test_saving_preferences_shows_a_green_bottom_bar_confirmation_without_replacing_status(self) -> None:
         window = MainWindow()
         try:
+            window.status_label.setText("FFmpeg 已就绪 | 队列: 0 项")
             with patch("app.main.AppSettingsDialog") as dialog_type:
                 dialog = dialog_type.return_value
                 dialog.exec.return_value = QDialog.DialogCode.Accepted
@@ -114,11 +115,9 @@ class DownloadSummaryDialogTests(unittest.TestCase):
 
                 window._open_settings()
 
-            self.assertEqual(
-                window.status_label.text(),
-                "设置已保存：提示音关；完成提示开；自动定位开。",
-            )
-            self.assertEqual(window.status_label.toolTip(), window.status_label.text())
+            self.assertEqual(window.status_label.text(), "FFmpeg 已就绪 | 队列: 0 项")
+            self.assertEqual(window.copy_tip_label.text(), "设置已保存")
+            self.assertEqual(window.copy_tip_label.property("active"), "true")
         finally:
             window.close()
 
