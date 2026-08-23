@@ -73,9 +73,10 @@ class PlatformLoginLayoutTests(unittest.TestCase):
                 window.login_tiktok_button,
             ]
             self.assertEqual(
-                [button.text() for button in buttons],
-                ["抖音", "YouTube", "哔哩哔哩", "小红书", "TikTok"],
+                [button.text() for button in buttons if button is not window.login_youtube_button],
+                ["抖音", "哔哩哔哩", "小红书", "TikTok"],
             )
+            self.assertIn(window.login_youtube_button.text(), {"YouTube", "YouTube（已连接）"})
             self.assertEqual([button.width() for button in buttons], [150, 150, 150, 150, 150])
             self.assertEqual(len({button.geometry().y() for button in buttons}), 1)
             self.assertEqual(window.output_edit.width(), window.url_text.width())

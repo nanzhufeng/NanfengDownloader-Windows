@@ -5,14 +5,19 @@ import re
 import time
 import traceback
 import urllib.request
+try:
+    import winsound
+except ImportError:  # 非 Windows 测试环境没有 winsound。
+    winsound = None
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QRect, QSize, Qt, QThread, QTimer, Signal, Slot, QSemaphore
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, QSettings, Qt, QThread, QTimer, Signal, Slot, QSemaphore
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -39,9 +44,12 @@ from PySide6.QtWidgets import (
 
 from .auth_profile import (
     AUTH_COOKIE_MODE,
+    cleanup_runtime_cookie_exports,
     find_browser_path,
     has_youtube_account_cookies,
     launch_login_browser,
+    migrate_legacy_cookie_files,
+    migrate_legacy_browser_profile_cookies,
     open_login_browser,
 )
 from .catalog import CatalogItem, discover_links
@@ -56,10 +64,15 @@ from .downloader import (
     split_urls,
 )
 from .media_validation import MEDIA_FILE_SUFFIXES, is_probable_existing_media
+from .url_safety import url_host_matches
 from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
+SETTINGS_ORGANIZATION = "Nanzhufeng"
+SETTING_COMPLETION_SOUND = "notifications/completion_sound_enabled"
+SETTING_RESULT_SUMMARY = "notifications/result_summary_enabled"
+SETTING_AUTO_REVEAL_OUTPUT = "completion/auto_reveal_output_enabled"
 QUALITY_OPTIONS = ["最佳画质", "1080p 及以下", "720p 及以下", "360p 及以下", "仅音频 MP3"]
 COL_INDEX = 0
 COL_SELECT = 1
@@ -81,6 +94,29 @@ def default_output_dir() -> Path:
     if d_drive.exists():
         return d_drive / "南枫下载"
     return Path.home() / "Downloads" / "南枫下载"
+
+
+def setting_as_bool(value: Any, default: bool = True) -> bool:
+    """兼容 QSettings 在不同后端返回的字符串或布尔值。"""
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().casefold() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
+def play_download_completion_sound() -> bool:
+    """异步播放 Windows 系统通知音，音量和静音状态由系统控制。"""
+    if winsound is None:
+        return False
+    try:
+        winsound.PlaySound(
+            "SystemNotification",
+            winsound.SND_ALIAS | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+        )
+    except RuntimeError:
+        return False
+    return True
 
 
 NETWORK_ERROR_KEYWORDS = (
@@ -308,6 +344,83 @@ class DownloadSummaryDialog(QDialog):
         return card, count_label
 
 
+class AppSettingsDialog(QDialog):
+    """只放用户明确需要的下载偏好，避免把主工作台变成设置页。"""
+
+    def __init__(
+        self,
+        completion_sound_enabled: bool,
+        result_summary_enabled: bool,
+        auto_reveal_output_enabled: bool,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("AppSettingsDialog")
+        self.setWindowTitle("设置")
+        self.setModal(True)
+        self.setMinimumWidth(380)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(10)
+
+        title = QLabel("完成提醒与行为")
+        title.setObjectName("AppSettingsTitle")
+        layout.addWidget(title)
+
+        options_panel = QFrame()
+        options_panel.setObjectName("SettingsOptionsPanel")
+        options_layout = QVBoxLayout(options_panel)
+        options_layout.setContentsMargins(14, 10, 14, 10)
+        options_layout.setSpacing(8)
+
+        self.completion_sound_checkbox = QCheckBox("完成提示音")
+        self.completion_sound_checkbox.setObjectName("CompletionSoundCheckBox")
+        self.completion_sound_checkbox.setChecked(completion_sound_enabled)
+        self.completion_sound_checkbox.setToolTip("下载任务结束时播放 Windows 系统提示音。")
+        options_layout.addWidget(self.completion_sound_checkbox)
+
+        self.result_summary_checkbox = QCheckBox("完成提示")
+        self.result_summary_checkbox.setObjectName("ResultSummaryCheckBox")
+        self.result_summary_checkbox.setChecked(result_summary_enabled)
+        self.result_summary_checkbox.setToolTip("下载任务结束时显示成功、失败、跳过和停止的结果摘要。")
+        options_layout.addWidget(self.result_summary_checkbox)
+
+        self.auto_reveal_output_checkbox = QCheckBox("完成后自动打开目录")
+        self.auto_reveal_output_checkbox.setObjectName("AutoRevealOutputCheckBox")
+        self.auto_reveal_output_checkbox.setChecked(auto_reveal_output_enabled)
+        self.auto_reveal_output_checkbox.setToolTip("全部成功时，使用列表“定位”同一方式，在资源管理器中选中最新完成的视频。")
+        options_layout.addWidget(self.auto_reveal_output_checkbox)
+        layout.addWidget(options_panel)
+
+        hint = QLabel("提示：这些选项会在下次启动时继续生效；自动打开会定位并选中最新完成的视频。")
+        hint.setObjectName("AppSettingsHint")
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        cancel_button = QPushButton("取消")
+        cancel_button.setObjectName("SettingsCancelButton")
+        cancel_button.clicked.connect(self.reject)
+        save_button = QPushButton("保存")
+        save_button.setObjectName("SettingsSaveButton")
+        save_button.setDefault(True)
+        save_button.clicked.connect(self.accept)
+        buttons.addWidget(cancel_button)
+        buttons.addWidget(save_button)
+        layout.addLayout(buttons)
+
+    def completion_sound_enabled(self) -> bool:
+        return self.completion_sound_checkbox.isChecked()
+
+    def result_summary_enabled(self) -> bool:
+        return self.result_summary_checkbox.isChecked()
+
+    def auto_reveal_output_enabled(self) -> bool:
+        return self.auto_reveal_output_checkbox.isChecked()
+
+
 @dataclass
 class QueueItem:
     url: str
@@ -450,10 +563,23 @@ class LoginWorker(QObject):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
         self.project_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
         self.ffmpeg_dir = find_ffmpeg_dir(self.project_root)
+        self.settings = settings if settings is not None else QSettings(SETTINGS_ORGANIZATION, APP_NAME)
+        self.completion_sound_enabled = setting_as_bool(
+            self.settings.value(SETTING_COMPLETION_SOUND, True),
+            default=True,
+        )
+        self.result_summary_enabled = setting_as_bool(
+            self.settings.value(SETTING_RESULT_SUMMARY, True),
+            default=True,
+        )
+        self.auto_reveal_output_enabled = setting_as_bool(
+            self.settings.value(SETTING_AUTO_REVEAL_OUTPUT, False),
+            default=False,
+        )
         self.worker_thread: QThread | None = None
         self.worker: DownloadWorker | None = None
         self.discovery_thread: QThread | None = None
@@ -585,6 +711,10 @@ class MainWindow(QMainWindow):
             sidebar_layout.addWidget(step_label)
         sidebar_layout.addStretch(1)
 
+        self.settings_button = QPushButton("设置")
+        self.settings_button.setObjectName("SettingsButton")
+        self.settings_button.clicked.connect(self._open_settings)
+        sidebar_layout.addWidget(self.settings_button)
         self.open_folder_button = QPushButton("打开保存目录")
         self.open_folder_button.setObjectName("SideButton")
         self.open_folder_button.clicked.connect(self._open_output_dir)
@@ -949,8 +1079,63 @@ class MainWindow(QMainWindow):
                 border: 1px solid #e5eaf3;
                 border-radius: 8px;
             }
+            QPushButton#SettingsButton {
+                min-height: 30px;
+                background: #ffffff;
+                border: 1px solid #dbe3f0;
+                color: #566176;
+                font-weight: 700;
+            }
+            QPushButton#SettingsButton:hover {
+                background: #f8faff;
+                border-color: #9fb3ff;
+                color: #3461ff;
+            }
             QDialog#DownloadSummaryDialog {
                 background: #ffffff;
+            }
+            QDialog#AppSettingsDialog {
+                background: #ffffff;
+            }
+            QLabel#AppSettingsTitle {
+                color: #111827;
+                font-size: 16px;
+                font-weight: 800;
+            }
+            QLabel#AppSettingsHint {
+                color: #7b8496;
+                font-size: 12px;
+            }
+            QFrame#SettingsOptionsPanel {
+                background: #f7fbfc;
+                border: 1px solid #cde0e6;
+                border-radius: 8px;
+            }
+            QCheckBox#CompletionSoundCheckBox,
+            QCheckBox#ResultSummaryCheckBox,
+            QCheckBox#AutoRevealOutputCheckBox {
+                color: #202939;
+                font-weight: 700;
+                spacing: 8px;
+            }
+            QPushButton#SettingsCancelButton {
+                min-width: 72px;
+                min-height: 28px;
+                background: #ffffff;
+                border: 1px solid #dbe3f0;
+                color: #566176;
+                font-weight: 700;
+            }
+            QPushButton#SettingsSaveButton {
+                min-width: 72px;
+                min-height: 28px;
+                background: #3461ff;
+                border: 1px solid #3461ff;
+                color: #ffffff;
+                font-weight: 700;
+            }
+            QPushButton#SettingsSaveButton:hover {
+                background: #254ff0;
             }
             QLabel#DownloadSummaryTitleSuccess,
             QLabel#DownloadSummaryTitleFailure,
@@ -1279,6 +1464,55 @@ class MainWindow(QMainWindow):
         if not browser_available:
             self.status_label.setText("未找到 Chrome 或 Edge：软件可打开，但软件内登录窗口不可用。")
 
+    def _open_settings(self) -> None:
+        dialog = AppSettingsDialog(
+            self.completion_sound_enabled,
+            self.result_summary_enabled,
+            self.auto_reveal_output_enabled,
+            self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        self._set_completion_preferences(
+            completion_sound_enabled=dialog.completion_sound_enabled(),
+            result_summary_enabled=dialog.result_summary_enabled(),
+            auto_reveal_output_enabled=dialog.auto_reveal_output_enabled(),
+        )
+        self._show_settings_saved_message()
+
+    def _set_completion_sound_enabled(self, enabled: bool) -> None:
+        self._set_completion_preferences(completion_sound_enabled=enabled)
+
+    def _set_completion_preferences(
+        self,
+        completion_sound_enabled: bool | None = None,
+        result_summary_enabled: bool | None = None,
+        auto_reveal_output_enabled: bool | None = None,
+    ) -> None:
+        if completion_sound_enabled is not None:
+            self.completion_sound_enabled = bool(completion_sound_enabled)
+        if result_summary_enabled is not None:
+            self.result_summary_enabled = bool(result_summary_enabled)
+        if auto_reveal_output_enabled is not None:
+            self.auto_reveal_output_enabled = bool(auto_reveal_output_enabled)
+        self.settings.setValue(SETTING_COMPLETION_SOUND, self.completion_sound_enabled)
+        self.settings.setValue(SETTING_RESULT_SUMMARY, self.result_summary_enabled)
+        self.settings.setValue(SETTING_AUTO_REVEAL_OUTPUT, self.auto_reveal_output_enabled)
+        self.settings.sync()
+
+    def _show_settings_saved_message(self) -> None:
+        """在主窗口底部状态栏反馈保存结果，不额外弹出干扰提示。"""
+        sound = "开" if self.completion_sound_enabled else "关"
+        summary = "开" if self.result_summary_enabled else "关"
+        auto_reveal = "开" if self.auto_reveal_output_enabled else "关"
+        self.status_label.setText(
+            f"设置已保存：提示音{sound}；完成提示{summary}；自动定位{auto_reveal}。"
+        )
+
+    def _play_completion_sound_if_enabled(self) -> None:
+        if self.completion_sound_enabled:
+            play_download_completion_sound()
+
     def changeEvent(self, event: QEvent) -> None:
         super().changeEvent(event)
         if event.type() == QEvent.ActivationChange and self.isActiveWindow():
@@ -1454,14 +1688,20 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_discovery_failed(self, error: str) -> None:
         self.discovery_had_error = True
-        source = self.discovery_source_text.lower()
+        source_urls = split_urls(self.discovery_source_text)
         login_platform: str | None = None
         login_name = ""
-        if "小红书按钮" in error and ("xiaohongshu.com" in source or "xhslink.com" in source):
+        if "小红书按钮" in error and any(
+            url_host_matches(url, "xiaohongshu.com", "xhslink.com") for url in source_urls
+        ):
             login_platform, login_name = "xiaohongshu", "小红书"
-        elif "哔哩哔哩按钮" in error and ("bilibili.com" in source or "b23.tv" in source):
+        elif "哔哩哔哩按钮" in error and any(
+            url_host_matches(url, "bilibili.com", "b23.tv") for url in source_urls
+        ):
             login_platform, login_name = "bilibili", "哔哩哔哩"
-        elif "tiktok 按钮" in error.lower() and "tiktok.com" in source:
+        elif "tiktok 按钮" in error.lower() and any(
+            url_host_matches(url, "tiktok.com") for url in source_urls
+        ):
             login_platform, login_name = "tiktok", "TikTok"
         if login_platform:
             answer = QMessageBox.question(
@@ -1492,8 +1732,8 @@ class MainWindow(QMainWindow):
         elif count >= self.discovery_limit:
             self.status_label.setText(f"已读取 {count} 个作品；可能还有更多，可以点击“加载更多视频”。")
         elif count <= 30 and any(
-            host in self.discovery_source_text.lower()
-            for host in ("douyin.com", "xiaohongshu.com", "bilibili.com", "tiktok.com")
+            url_host_matches(url, "douyin.com", "xiaohongshu.com", "bilibili.com", "tiktok.com")
+            for url in split_urls(self.discovery_source_text)
         ):
             self.status_label.setText(
                 f"已读取 {count} 个作品；如需更多，请先登录对应平台后重读。"
@@ -1832,10 +2072,10 @@ class MainWindow(QMainWindow):
             self.status_label.setText("下载任务已结束。")
             self.main_progress.setValue(100)
             counts = self._download_summary_counts()
-            self.active_download_rows.clear()
             self.download_started_at = None
             self.total_eta_label.setText("总剩余：0秒")
             self._show_download_summary(counts)
+            self.active_download_rows.clear()
             return
         if skipped:
             self.status_label.setText(f"已快速跳过 {skipped} 个已存在文件，正在下载剩余项目。")
@@ -2048,10 +2288,10 @@ class MainWindow(QMainWindow):
             return
         self.status_label.setText("下载任务已结束。")
         counts = self._download_summary_counts()
-        self.active_download_rows.clear()
         self.download_started_at = None
         self.total_eta_label.setText("总剩余：0秒")
         self._show_download_summary(counts)
+        self.active_download_rows.clear()
 
     @Slot()
     def _cleanup_worker(self) -> None:
@@ -2101,11 +2341,34 @@ class MainWindow(QMainWindow):
         return counts
 
     def _show_download_summary(self, counts: dict[str, int] | None = None) -> None:
-        DownloadSummaryDialog(
-            counts or self._download_summary_counts(),
-            self,
-            failure_detail=self.latest_failure_detail,
-        ).exec()
+        resolved_counts = counts or self._download_summary_counts()
+        self._play_completion_sound_if_enabled()
+        # Explorer 定位是非阻塞调用，先触发可与完成弹窗同时出现。
+        self._auto_reveal_completed_batch_file(resolved_counts)
+        if self.result_summary_enabled:
+            DownloadSummaryDialog(
+                resolved_counts,
+                self,
+                failure_detail=self.latest_failure_detail,
+            ).exec()
+
+    def _auto_reveal_completed_batch_file(self, counts: dict[str, int]) -> None:
+        """全部成功时复用队列“定位”逻辑，选中本批最后完成的视频文件。"""
+        if not self.auto_reveal_output_enabled or not self.active_download_rows:
+            return
+        active_rows = sorted(self.active_download_rows)
+        if counts.get("失败", 0) or counts.get("已停止", 0):
+            return
+        if counts.get("完成", 0) + counts.get("已跳过", 0) != len(active_rows):
+            return
+
+        for row in reversed(active_rows):
+            status_item = self.table.item(row, COL_STATUS)
+            if not status_item or status_item.text() not in {"完成", "已跳过"}:
+                continue
+            if self.row_output_files.get(row):
+                self._reveal_row_output(row)
+                return
 
     def _download_summary_text(self) -> str:
         counts = self._download_summary_counts()
@@ -2217,8 +2480,19 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    migration_message = ""
+    try:
+        cleanup_runtime_cookie_exports()
+        migrated = migrate_legacy_cookie_files()
+        migrated += migrate_legacy_browser_profile_cookies()
+        if migrated:
+            migration_message = f"已加密迁移 {migrated} 份历史登录 Cookie。"
+    except RuntimeError as exc:
+        migration_message = f"登录 Cookie 未能完成加密迁移：{exc}"
     window = MainWindow()
     window.show()
+    if migration_message:
+        window.status_label.setText(migration_message)
     return app.exec()
 
 

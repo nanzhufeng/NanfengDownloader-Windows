@@ -10,7 +10,7 @@
 
 ## 下载安装
 
-当前可下载正式版为 [v2026.08.21](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.21-windows)。该 Windows 安装包由 Inno Setup 7 x64 构建，并已完成本地安装、运行时与卸载验证。
+当前可下载正式版为 [v2026.08.23](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.23-windows)。该 Windows 安装包由 Inno Setup 7 x64 构建，并已完成本地安装、运行时、启动与卸载验证。
 
 安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
@@ -19,7 +19,7 @@
 - 支持公开内容，以及登录后当前账号本来有权限访问的内容。
 - 不支持会员、付费、DRM、私密内容或访问权限绕过。
 - 不在软件里填写或保存账号密码。
-- 软件内登录使用独立持久浏览器资料目录；下载器只读取目标平台自己的 Cookie，不再聚合跨平台会话。
+- 软件内登录使用独立持久浏览器资料目录；历史 Cookie 按平台保留为 Windows 当前用户可解密的 DPAPI 加密快照，下载器只临时读取目标平台自己的副本，不再聚合跨平台会话。
 - 外部平台仍可能基于网络、地区、IP 或账号行为要求验证，软件不会把平台限制伪装成本地修复成功。
 
 ## 当前功能
@@ -99,6 +99,6 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1 -Ve
 
 构建脚本默认使用 Inno Setup 7 x64；仅在 7 未安装时回退到 Inno Setup 6。
 
-构建必须显式指定一个新的 `YYYY.MM.DD` 版本；安装器名称和 GitHub 标签由同一版本元数据生成，已存在的 Release 标签会被拒绝而不是覆盖。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料；更新前请自行关闭正在下载的南枫下载，安装器不会强制结束下载任务。
+构建必须显式指定一个新的 `YYYY.MM.DD` 版本；安装器名称和 GitHub 标签由同一版本元数据生成，已存在的 Release 标签会被拒绝而不是覆盖。构建先写入隔离工作目录，只有安装包完整生成后才进入 `installer/releases`，中断产物不会伪装为正式 Release。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料；更新前请自行关闭正在下载的南枫下载，安装器不会强制结束下载任务。
 
 打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。

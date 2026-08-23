@@ -129,7 +129,7 @@ def discover_tiktok_items(url: str, options: Any, max_items: int = 500) -> list[
     """读取 TikTok 单视频、分享短链或作者主页。"""
     from yt_dlp import YoutubeDL
 
-    from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt
+    from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt, release_auth_cookie_export
 
     single_video = _is_single_video_url(url)
     ydl_options: dict[str, Any] = {
@@ -144,18 +144,23 @@ def discover_tiktok_items(url: str, options: Any, max_items: int = 500) -> list[
     }
     if options.ffmpeg_dir:
         ydl_options["ffmpeg_location"] = str(options.ffmpeg_dir)
+    managed_cookie_file = None
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        ydl_options["cookiefile"] = str(export_auth_cookies_txt("tiktok"))
+        managed_cookie_file = export_auth_cookies_txt("tiktok")
+        ydl_options["cookiefile"] = str(managed_cookie_file)
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         ydl_options["cookiesfrombrowser"] = (options.cookie_mode.lower(),)
     elif options.cookie_mode == "cookies.txt" and options.cookie_file:
         ydl_options["cookiefile"] = str(options.cookie_file)
 
     try:
-        with YoutubeDL(ydl_options) as ydl:
-            info = ydl.extract_info(url, download=False)
-    except Exception as exc:
-        raise _friendly_tiktok_error(exc) from exc
+        try:
+            with YoutubeDL(ydl_options) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except Exception as exc:
+            raise _friendly_tiktok_error(exc) from exc
+    finally:
+        release_auth_cookie_export(managed_cookie_file)
     if not isinstance(info, dict):
         return []
     return catalog_items_from_tiktok_info(info, source_url=url, max_items=max_items)

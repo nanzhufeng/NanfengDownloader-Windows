@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from time import sleep
 from typing import Any
 
-from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt
+from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt, release_auth_cookie_export
 from .downloader import (
     DownloadOptions,
     build_youtube_runtime_options,
@@ -179,39 +179,54 @@ def _discover_youtube_items_once(
 def discover_youtube_items(url: str, options: DownloadOptions, max_items: int = 500) -> list[CatalogItem]:
     """读取 YouTube 视频、频道或播放列表，并返回可下载条目。"""
     is_single_video_url = _is_youtube_video_url(url)
+    if is_single_video_url:
+        # 单视频没有“展开列表”的必要。直接入队可避免提前启动 YouTube 的完整元数据、
+        # JavaScript 挑战和访客令牌流程；真正下载时仍由 yt-dlp 解析标题、作者和媒体流。
+        return [
+            CatalogItem(
+                platform="YouTube",
+                title="YouTube 视频（下载时解析）",
+                url=url,
+            )
+        ]
+
     ydl_options: dict[str, Any] = {
         "extract_flat": "in_playlist",
         "skip_download": True,
         "quiet": True,
-        "ignoreerrors": not is_single_video_url,
-        "noplaylist": is_single_video_url,
+        "ignoreerrors": True,
+        "noplaylist": False,
     }
     ydl_options.update(build_youtube_runtime_options())
     if options.ffmpeg_dir:
         ydl_options["ffmpeg_location"] = str(options.ffmpeg_dir)
+    managed_cookie_file = None
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        ydl_options["cookiefile"] = str(export_auth_cookies_txt("youtube"))
+        managed_cookie_file = export_auth_cookies_txt("youtube")
+        ydl_options["cookiefile"] = str(managed_cookie_file)
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         ydl_options["cookiesfrombrowser"] = (options.cookie_mode.lower(),)
     elif options.cookie_mode == "cookies.txt" and options.cookie_file:
         ydl_options["cookiefile"] = str(options.cookie_file)
 
-    for attempt in range(YOUTUBE_PUBLIC_READ_ATTEMPTS):
-        try:
-            return _discover_youtube_items_once(url, ydl_options, max_items)
-        except Exception as exc:
-            if attempt + 1 < YOUTUBE_PUBLIC_READ_ATTEMPTS and should_retry_public_youtube_request(exc):
-                sleep(YOUTUBE_PUBLIC_READ_RETRY_DELAY_SECONDS)
-                continue
-            youtube_auth_error = friendly_youtube_auth_error(exc)
-            if youtube_auth_error:
-                raise youtube_auth_error from exc
-            friendly_error = _friendly_cookie_error(exc)
-            if friendly_error:
-                raise friendly_error from exc
-            raise
-
-    raise RuntimeError("YouTube 读取重试流程异常结束。")
+    try:
+        for attempt in range(YOUTUBE_PUBLIC_READ_ATTEMPTS):
+            try:
+                return _discover_youtube_items_once(url, ydl_options, max_items)
+            except Exception as exc:
+                if attempt + 1 < YOUTUBE_PUBLIC_READ_ATTEMPTS and should_retry_public_youtube_request(exc):
+                    sleep(YOUTUBE_PUBLIC_READ_RETRY_DELAY_SECONDS)
+                    continue
+                youtube_auth_error = friendly_youtube_auth_error(exc)
+                if youtube_auth_error:
+                    raise youtube_auth_error from exc
+                friendly_error = _friendly_cookie_error(exc)
+                if friendly_error:
+                    raise friendly_error from exc
+                raise
+        raise RuntimeError("YouTube 读取重试流程异常结束。")
+    finally:
+        release_auth_cookie_export(managed_cookie_file)
 
 
 def discover_links(text: str, options: DownloadOptions, max_items: int = 500) -> list[CatalogItem]:

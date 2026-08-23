@@ -12,6 +12,8 @@ from typing import Any
 import urllib.request
 from urllib.parse import urlencode, urlparse
 
+from .url_safety import url_host
+
 
 XIAOHONGSHU_HOSTS = {
     "xiaohongshu.com",
@@ -299,7 +301,8 @@ def discover_xiaohongshu_items(url: str, options: Any, max_items: int = 500) -> 
 
     from .catalog import CatalogItem
 
-    if _note_id_from_url(url) or "xhslink.com" in url.lower():
+    host = url_host(url)
+    if _note_id_from_url(url) or host in {"xhslink.com", "www.xhslink.com"}:
         info, final_url = fetch_xiaohongshu_info(url, options)
         return [
             CatalogItem(

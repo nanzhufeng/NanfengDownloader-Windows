@@ -32,6 +32,12 @@ try {
         throw "Release version is invalid."
     }
 
+    $releaseDirectory = Join-Path $projectRoot "installer\releases"
+    $releaseInstaller = Join-Path $releaseDirectory $metadata.installer_name
+    if (Test-Path -LiteralPath $releaseInstaller) {
+        throw "Refusing to overwrite an existing release artifact: $releaseInstaller"
+    }
+
     if (-not $SkipTests) {
         python -m unittest discover -s tests -v
         if ($LASTEXITCODE -ne 0) {
@@ -51,18 +57,23 @@ try {
         throw "PyInstaller build failed."
     }
 
-    & $iscc "/DMyAppVersion=$($metadata.app_version)" "/DMyVersionInfo=$($metadata.version_info)" "/DMyOutputVersion=$($metadata.output_version)" "packaging\windows\NanfengDownloader.iss"
+    $buildOutputDirectory = Join-Path $projectRoot ("installer\work\{0}-{1}" -f $metadata.output_version, [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $buildOutputDirectory -Force | Out-Null
+    & $iscc "/DMyAppVersion=$($metadata.app_version)" "/DMyVersionInfo=$($metadata.version_info)" "/DMyOutputVersion=$($metadata.output_version)" "/DMyAppOutputDir=$buildOutputDirectory" "packaging\windows\NanfengDownloader.iss"
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup build failed."
     }
 
-    $installer = Join-Path $projectRoot ("installer\releases\{0}" -f $metadata.installer_name)
+    $installer = Join-Path $buildOutputDirectory $metadata.installer_name
     if (-not (Test-Path -LiteralPath $installer)) {
-        throw "Installer was not created: $installer"
+        throw "Installer was not created in the isolated build directory: $installer"
     }
 
-    $hash = Get-FileHash -LiteralPath $installer -Algorithm SHA256
-    Write-Output "Installer: $installer"
+    New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
+    Move-Item -LiteralPath $installer -Destination $releaseInstaller -ErrorAction Stop
+
+    $hash = Get-FileHash -LiteralPath $releaseInstaller -Algorithm SHA256
+    Write-Output "Installer: $releaseInstaller"
     Write-Output "SHA-256: $($hash.Hash)"
 }
 finally {

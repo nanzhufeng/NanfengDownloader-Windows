@@ -1,8 +1,12 @@
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QSettings
+from PySide6.QtWidgets import QApplication, QDialog
 
-from app.main import DownloadSummaryDialog, MainWindow
+from app.main import AppSettingsDialog, DownloadSummaryDialog, MainWindow
 
 
 class DownloadSummaryDialogTests(unittest.TestCase):
@@ -59,6 +63,170 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             )
         finally:
             window.close()
+
+    def test_settings_dialog_reflects_completion_sound_preference(self) -> None:
+        dialog = AppSettingsDialog(False, True, False)
+
+        self.assertFalse(dialog.completion_sound_enabled())
+        self.assertTrue(dialog.result_summary_enabled())
+        self.assertFalse(dialog.auto_reveal_output_enabled())
+        dialog.completion_sound_checkbox.setChecked(True)
+        dialog.result_summary_checkbox.setChecked(False)
+        dialog.auto_reveal_output_checkbox.setChecked(True)
+        self.assertTrue(dialog.completion_sound_enabled())
+        self.assertFalse(dialog.result_summary_enabled())
+        self.assertTrue(dialog.auto_reveal_output_enabled())
+
+    def test_completion_sound_preference_persists_in_the_app_settings_store(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings_path = Path(temp_dir) / "preferences.ini"
+            settings = QSettings(str(settings_path), QSettings.Format.IniFormat)
+            window = MainWindow(settings=settings)
+            try:
+                self.assertTrue(window.completion_sound_enabled)
+                self.assertTrue(window.result_summary_enabled)
+                self.assertFalse(window.auto_reveal_output_enabled)
+                window._set_completion_preferences(
+                    completion_sound_enabled=False,
+                    result_summary_enabled=False,
+                    auto_reveal_output_enabled=True,
+                )
+            finally:
+                window.close()
+
+            reloaded = MainWindow(settings=QSettings(str(settings_path), QSettings.Format.IniFormat))
+            try:
+                self.assertFalse(reloaded.completion_sound_enabled)
+                self.assertFalse(reloaded.result_summary_enabled)
+                self.assertTrue(reloaded.auto_reveal_output_enabled)
+            finally:
+                reloaded.close()
+
+    def test_saving_preferences_shows_the_saved_state_in_the_bottom_status_bar(self) -> None:
+        window = MainWindow()
+        try:
+            with patch("app.main.AppSettingsDialog") as dialog_type:
+                dialog = dialog_type.return_value
+                dialog.exec.return_value = QDialog.DialogCode.Accepted
+                dialog.completion_sound_enabled.return_value = False
+                dialog.result_summary_enabled.return_value = True
+                dialog.auto_reveal_output_enabled.return_value = True
+
+                window._open_settings()
+
+            self.assertEqual(
+                window.status_label.text(),
+                "设置已保存：提示音关；完成提示开；自动定位开。",
+            )
+            self.assertEqual(window.status_label.toolTip(), window.status_label.text())
+        finally:
+            window.close()
+
+    def test_summary_plays_system_notification_once_when_enabled(self) -> None:
+        window = MainWindow()
+        try:
+            window.completion_sound_enabled = True
+            window.result_summary_enabled = True
+            with patch("app.main.play_download_completion_sound") as play_sound, patch(
+                "app.main.DownloadSummaryDialog"
+            ) as dialog_type:
+                dialog_type.return_value.exec.return_value = 0
+
+                window._show_download_summary({"完成": 1, "已跳过": 0, "失败": 0, "已停止": 0})
+
+            play_sound.assert_called_once_with()
+        finally:
+            window.close()
+
+    def test_summary_stays_silent_when_completion_sound_is_disabled(self) -> None:
+        window = MainWindow()
+        try:
+            window.completion_sound_enabled = False
+            window.result_summary_enabled = True
+            with patch("app.main.play_download_completion_sound") as play_sound, patch(
+                "app.main.DownloadSummaryDialog"
+            ) as dialog_type:
+                dialog_type.return_value.exec.return_value = 0
+
+                window._show_download_summary({"完成": 1, "已跳过": 0, "失败": 0, "已停止": 0})
+
+            play_sound.assert_not_called()
+        finally:
+            window.close()
+
+    def test_summary_can_be_disabled_without_disabling_completion_sound(self) -> None:
+        window = MainWindow()
+        try:
+            window.completion_sound_enabled = True
+            window.result_summary_enabled = False
+            with patch("app.main.play_download_completion_sound") as play_sound, patch(
+                "app.main.DownloadSummaryDialog"
+            ) as dialog_type:
+                window._show_download_summary({"完成": 1, "已跳过": 0, "失败": 0, "已停止": 0})
+
+            play_sound.assert_called_once_with()
+            dialog_type.assert_not_called()
+        finally:
+            window.close()
+
+    def test_all_success_auto_reveals_the_last_completed_row_when_summary_opens(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first_file = Path(temp_dir) / "first.mp4"
+            second_file = Path(temp_dir) / "second.mp4"
+            first_file.write_bytes(b"first")
+            second_file.write_bytes(b"second")
+            window = MainWindow()
+            try:
+                for index, file_path in enumerate((first_file, second_file)):
+                    window._add_queue_row(
+                        url=f"https://example.test/{index}",
+                        platform="测试平台",
+                        title=file_path.stem,
+                    )
+                    window._on_item_finished(index, file_path.name, [file_path])
+                window.active_download_rows = {0, 1}
+                window.completion_sound_enabled = False
+                window.result_summary_enabled = True
+                window.auto_reveal_output_enabled = True
+                events: list[str] = []
+                with patch("app.main.DownloadSummaryDialog") as dialog_type, patch(
+                    "app.main.reveal_file_in_explorer", return_value=second_file.resolve()
+                ) as reveal:
+                    dialog_type.return_value.exec.side_effect = lambda: events.append("summary")
+                    reveal.side_effect = lambda _path: events.append("reveal") or second_file.resolve()
+
+                    window._show_download_summary({"完成": 2, "已跳过": 0, "失败": 0, "已停止": 0})
+
+                reveal.assert_called_once_with(second_file.resolve())
+                self.assertEqual(events, ["reveal", "summary"])
+                self.assertEqual(window.table.currentRow(), 1)
+            finally:
+                window.close()
+
+    def test_auto_reveal_does_not_run_when_the_batch_has_a_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_file = Path(temp_dir) / "completed.mp4"
+            output_file.write_bytes(b"done")
+            window = MainWindow()
+            try:
+                for index in range(2):
+                    window._add_queue_row(
+                        url=f"https://example.test/{index}",
+                        platform="测试平台",
+                        title=f"视频 {index}",
+                    )
+                window._on_item_finished(0, output_file.name, [output_file])
+                window._set_row_status(1, "失败")
+                window.active_download_rows = {0, 1}
+                window.completion_sound_enabled = False
+                window.result_summary_enabled = False
+                window.auto_reveal_output_enabled = True
+                with patch("app.main.reveal_file_in_explorer") as reveal:
+                    window._show_download_summary({"完成": 1, "已跳过": 0, "失败": 1, "已停止": 0})
+
+                reveal.assert_not_called()
+            finally:
+                window.close()
 
 
 if __name__ == "__main__":

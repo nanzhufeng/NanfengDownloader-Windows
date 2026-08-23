@@ -37,6 +37,8 @@ class SupportedPlatformSidebarTests(unittest.TestCase):
 
             self.assertEqual(window.output_edit.width(), window.url_text.width())
             self.assertLess(window.platform_cards[-1].geometry().bottom(), window.open_folder_button.geometry().top())
+            self.assertIs(window.settings_button.parentWidget(), window.open_folder_button.parentWidget())
+            self.assertLess(window.settings_button.geometry().bottom(), window.open_folder_button.geometry().top())
         finally:
             window.close()
             app.processEvents()

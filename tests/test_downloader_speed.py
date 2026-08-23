@@ -9,6 +9,7 @@ from app.downloader import (
     DownloadOptions,
     _download_with_adaptive_concurrency,
     _is_fragment_rate_limit_error,
+    _youtube_download_profiles,
     _apply_single_media_download_options,
     build_format_selector,
     build_format_sort,
@@ -172,6 +173,46 @@ class DownloadSpeedOptionsTests(unittest.TestCase):
             [16, 8],
         )
         self.assertEqual(progress_events[-1]["fragment_concurrency"], 8)
+
+    @patch("app.downloader._run_ytdlp_download")
+    def test_repeated_403_falls_back_to_single_connection_without_http_chunks(self, run_download) -> None:
+        run_download.side_effect = [
+            RuntimeError("HTTP Error 403: Forbidden"),
+            RuntimeError("HTTP Error 403: Forbidden"),
+            0,
+        ]
+        progress_events: list[dict[str, object]] = []
+
+        result = _download_with_adaptive_concurrency(
+            "https://www.youtube.com/watch?v=test",
+            {
+                "concurrent_fragment_downloads": 16,
+                "http_chunk_size": 10 * 1024 * 1024,
+            },
+            progress_events.append,
+            None,
+        )
+
+        self.assertEqual(result, 0)
+        self.assertEqual(
+            [
+                (
+                    item.args[1]["concurrent_fragment_downloads"],
+                    item.args[1]["http_chunk_size"],
+                )
+                for item in run_download.call_args_list
+            ],
+            [(16, 10 * 1024 * 1024), (8, 10 * 1024 * 1024), (1, 0)],
+        )
+        self.assertIn("稳定单连接", str(progress_events[-1]["reason"]))
+
+    def test_adaptive_profiles_do_not_duplicate_single_connection_fallback(self) -> None:
+        self.assertEqual(
+            _youtube_download_profiles(
+                {"concurrent_fragment_downloads": 1, "http_chunk_size": 0}
+            ),
+            [(1, 0)],
+        )
 
     @patch("app.downloader._run_ytdlp_download")
     def test_bot_challenge_does_not_retry(self, run_download) -> None:

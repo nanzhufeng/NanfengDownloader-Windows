@@ -22,6 +22,7 @@ from yt_dlp.cookies import extract_cookies_from_browser
 from .auth_profile import AUTH_COOKIE_MODE, cookie_jar_from_auth_profile
 from .downloader import CancelCallback, DownloadOptions, DownloadResult, DownloadStopped, raise_if_cancelled, safe_path_name
 from .media_validation import InvalidMediaError, validate_media_file
+from .url_safety import url_host_matches
 
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -86,7 +87,7 @@ class DouyinInfo:
 
 
 def is_douyin_url(url: str) -> bool:
-    return "douyin.com" in url.lower()
+    return url_host_matches(url, "douyin.com", "iesdouyin.com")
 
 
 def _build_cookie_jar(options: DownloadOptions) -> http.cookiejar.CookieJar | None:
@@ -756,7 +757,7 @@ def _fetch_douyin_info(url: str, options: DownloadOptions) -> DouyinInfo:
                 author_name=_find_author_name(blob),
             )
 
-    referer = final_url if "douyin.com" in final_url else f"https://www.douyin.com/video/{aweme_id}"
+    referer = final_url if is_douyin_url(final_url) else f"https://www.douyin.com/video/{aweme_id}"
     api_urls = [
         (
             "https://www.douyin.com/aweme/v1/web/aweme/detail/"

@@ -6,6 +6,8 @@ import re
 from typing import Any
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
+from .url_safety import url_host
+
 
 BILIBILI_HOSTS = {"bilibili.com", "www.bilibili.com", "m.bilibili.com", "space.bilibili.com", "b23.tv"}
 
@@ -247,7 +249,7 @@ def discover_bilibili_items(url: str, options: Any, max_items: int = 500) -> lis
     """读取 B站单视频、UP 主空间、合集或播放列表。"""
     from yt_dlp import YoutubeDL
 
-    from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt
+    from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt, release_auth_cookie_export
 
     single_video = _is_single_video_url(url)
     ydl_options: dict[str, Any] = {
@@ -260,31 +262,36 @@ def discover_bilibili_items(url: str, options: Any, max_items: int = 500) -> lis
     }
     if options.ffmpeg_dir:
         ydl_options["ffmpeg_location"] = str(options.ffmpeg_dir)
+    managed_cookie_file = None
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        ydl_options["cookiefile"] = str(export_auth_cookies_txt("bilibili"))
+        managed_cookie_file = export_auth_cookies_txt("bilibili")
+        ydl_options["cookiefile"] = str(managed_cookie_file)
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         ydl_options["cookiesfrombrowser"] = (options.cookie_mode.lower(),)
     elif options.cookie_mode == "cookies.txt" and options.cookie_file:
         ydl_options["cookiefile"] = str(options.cookie_file)
 
     try:
-        with YoutubeDL(ydl_options) as ydl:
-            info = ydl.extract_info(url, download=False)
-        if not isinstance(info, dict):
-            return []
-        return catalog_items_from_bilibili_info(info, max_items=max_items)
-    except Exception as exc:
-        detail = str(exc).lower()
-        is_space = "space.bilibili.com" in url.lower()
-        if is_space and (
-            "412" in detail
-            or "precondition failed" in detail
-            or "request is blocked by server" in detail
-        ):
-            return _discover_space_with_browser(url, options, max_items)
-        if "412" in detail or "precondition failed" in detail:
-            raise RuntimeError(
-                "哔哩哔哩触发了访问保护（HTTP 412）。请先点击顶部哔哩哔哩按钮，"
-                "或稍后更换网络后重试。"
-            ) from exc
-        raise
+        try:
+            with YoutubeDL(ydl_options) as ydl:
+                info = ydl.extract_info(url, download=False)
+            if not isinstance(info, dict):
+                return []
+            return catalog_items_from_bilibili_info(info, max_items=max_items)
+        except Exception as exc:
+            detail = str(exc).lower()
+            is_space = url_host(url) == "space.bilibili.com"
+            if is_space and (
+                "412" in detail
+                or "precondition failed" in detail
+                or "request is blocked by server" in detail
+            ):
+                return _discover_space_with_browser(url, options, max_items)
+            if "412" in detail or "precondition failed" in detail:
+                raise RuntimeError(
+                    "哔哩哔哩触发了访问保护（HTTP 412）。请先点击顶部哔哩哔哩按钮，"
+                    "或稍后更换网络后重试。"
+                ) from exc
+            raise
+    finally:
+        release_auth_cookie_export(managed_cookie_file)

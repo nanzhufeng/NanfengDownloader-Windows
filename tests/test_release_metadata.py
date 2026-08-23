@@ -57,6 +57,26 @@ class InstallerContractTests(unittest.TestCase):
         self.assertNotIn("--clobber", content)
         self.assertIn("release_metadata.py --tag", content)
 
+    def test_release_workflow_pins_actions_and_downloaded_build_inputs(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        content = (root / ".github" / "workflows" / "release-windows.yml").read_text(encoding="utf-8")
+
+        self.assertIn("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", content)
+        self.assertIn("actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065", content)
+        self.assertIn("actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020", content)
+        self.assertIn("7608dd51ee813b48cf9a6d68c6e42cb197ce10e0", content)
+        self.assertIn("5AD54CA3DEF786F8F4212552E54CC6D8D61329E2D24A1CFEE0571D42C2684FF1", content)
+        self.assertIn("choco install ffmpeg --version=9.0.1", content)
+        self.assertIn("Unexpected bundled FFmpeg version", content)
+
+    def test_local_build_promotes_only_after_isolated_output_exists(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        content = (root / "scripts" / "build_windows_installer.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("installer\\work\\{0}-{1}", content)
+        self.assertIn("Refusing to overwrite an existing release artifact", content)
+        self.assertIn("Move-Item -LiteralPath $installer -Destination $releaseInstaller", content)
+
 
 if __name__ == "__main__":
     unittest.main()

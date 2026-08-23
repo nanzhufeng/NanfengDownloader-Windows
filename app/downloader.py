@@ -21,7 +21,9 @@ from .auth_profile import (
     auth_data_dir,
     export_auth_cookies_txt,
     has_youtube_account_cookies,
+    release_auth_cookie_export,
 )
+from .url_safety import url_host, url_host_matches
 
 
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -30,6 +32,7 @@ CancelCallback = Callable[[], bool]
 
 FRAGMENT_DOWNLOAD_CONCURRENCY = 16
 FALLBACK_FRAGMENT_DOWNLOAD_CONCURRENCY = 8
+STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY = 1
 DOWNLOAD_BUFFER_SIZE = 1024 * 1024
 HTTP_DOWNLOAD_CHUNK_SIZE = 10 * 1024 * 1024
 PROGRESS_UPDATE_INTERVAL = 0.2
@@ -94,16 +97,15 @@ def split_urls(text: str) -> list[str]:
 
 
 def detect_platform(url: str) -> str:
-    lower = url.lower()
-    if "douyin.com" in lower:
+    if url_host_matches(url, "douyin.com", "iesdouyin.com"):
         return "抖音"
-    if "youtube.com" in lower or "youtu.be" in lower:
+    if url_host_matches(url, "youtube.com", "youtu.be"):
         return "YouTube"
-    if "bilibili.com" in lower or "b23.tv" in lower:
+    if url_host_matches(url, "bilibili.com", "b23.tv"):
         return "哔哩哔哩"
-    if "xiaohongshu.com" in lower or "xhslink.com" in lower:
+    if url_host_matches(url, "xiaohongshu.com", "xhslink.com"):
         return "小红书"
-    if "tiktok.com" in lower:
+    if url_host_matches(url, "tiktok.com"):
         return "TikTok"
     return "未知"
 
@@ -227,6 +229,7 @@ def build_ydl_options(
     progress_callback: ProgressCallback,
     cancel_callback: CancelCallback | None = None,
     auth_platform: str | None = None,
+    managed_cookie_file: Path | None = None,
 ) -> dict[str, Any]:
     def checked_progress(info: dict[str, Any]) -> None:
         raise_if_cancelled(cancel_callback)
@@ -276,7 +279,8 @@ def build_ydl_options(
         ]
 
     if options.cookie_mode == AUTH_COOKIE_MODE:
-        ydl_options["cookiefile"] = str(export_auth_cookies_txt(auth_platform))
+        cookie_file = managed_cookie_file or export_auth_cookies_txt(auth_platform)
+        ydl_options["cookiefile"] = str(cookie_file)
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
         ydl_options["cookiesfrombrowser"] = (options.cookie_mode.lower(),)
     elif options.cookie_mode == "cookies.txt" and options.cookie_file:
@@ -292,7 +296,7 @@ def _apply_bilibili_page_download_options(
     """让 B站分 P 队列项只下载当前页，并在文件名前保留稳定页码。"""
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
-    if "bilibili.com" not in host or "/video/" not in parsed.path.lower():
+    if not (host == "bilibili.com" or host.endswith(".bilibili.com")) or "/video/" not in parsed.path.lower():
         return
     page_values = parse_qs(parsed.query).get("p") or []
     if not page_values or not str(page_values[0]).isdigit():
@@ -314,15 +318,15 @@ def _is_single_media_url(url: str) -> bool:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
     path = parsed.path.lower()
-    if host.endswith("youtube.com"):
+    if host == "youtube.com" or host.endswith(".youtube.com"):
         return (path == "/watch" and bool(parse_qs(parsed.query).get("v"))) or path.startswith("/shorts/")
     if host == "youtu.be" or host.endswith(".youtu.be"):
         return bool(path.strip("/"))
-    if host.endswith("bilibili.com"):
+    if host == "bilibili.com" or host.endswith(".bilibili.com"):
         return "/video/" in path or "/bangumi/play/" in path
     if host == "b23.tv" or host.endswith(".b23.tv"):
         return bool(path.strip("/"))
-    if host.endswith("tiktok.com"):
+    if host == "tiktok.com" or host.endswith(".tiktok.com"):
         return "/video/" in path
     return False
 
@@ -350,12 +354,40 @@ def _is_fragment_rate_limit_error(exc: Exception) -> bool:
     )
 
 
+def _youtube_download_profiles(ydl_options: dict[str, Any]) -> list[tuple[int, int]]:
+    """高速优先，403/429 后逐级减少请求数，并最终关闭 HTTP 分块。"""
+    primary_concurrency = int(
+        ydl_options.get("concurrent_fragment_downloads", FRAGMENT_DOWNLOAD_CONCURRENCY)
+    )
+    primary_chunk_size = int(ydl_options.get("http_chunk_size", HTTP_DOWNLOAD_CHUNK_SIZE) or 0)
+    profiles = [(primary_concurrency, primary_chunk_size)]
+    if primary_concurrency > FALLBACK_FRAGMENT_DOWNLOAD_CONCURRENCY:
+        profiles.append((FALLBACK_FRAGMENT_DOWNLOAD_CONCURRENCY, primary_chunk_size))
+    if profiles[-1] != (STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY, 0):
+        profiles.append((STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY, 0))
+    return profiles
+
+
 def is_youtube_auth_error_text(detail: str) -> bool:
     normalized = detail.lower().replace("’", "'")
     return (
         "sign in to confirm" in normalized
         and ("not a bot" in normalized or "you're not a bot" in normalized)
     ) or "youtube 需要账号验证" in normalized
+
+
+def is_youtube_unavailable_error_text(detail: str) -> bool:
+    normalized = detail.lower()
+    return "video unavailable" in normalized or "this video is unavailable" in normalized
+
+
+def friendly_youtube_unavailable_error(exc: Exception) -> RuntimeError | None:
+    if not is_youtube_unavailable_error_text(str(exc)):
+        return None
+    return RuntimeError(
+        "YouTube 当前无法提供这条视频。它可能已删除、设为私密、受地区或年龄限制，"
+        "或原链接已失效；请先在浏览器确认该视频可正常播放，再重新读取下载。"
+    )
 
 
 def friendly_youtube_auth_error(exc: Exception) -> RuntimeError | None:
@@ -412,31 +444,33 @@ def _download_with_adaptive_concurrency(
     progress_callback: ProgressCallback,
     cancel_callback: CancelCallback | None,
 ) -> int | None:
-    """优先高速分片；平台限流时仅降并发重试一次并复用断点文件。"""
-    primary_concurrency = int(
-        ydl_options.get("concurrent_fragment_downloads", FRAGMENT_DOWNLOAD_CONCURRENCY)
-    )
-    attempts = [primary_concurrency]
-    if primary_concurrency > FALLBACK_FRAGMENT_DOWNLOAD_CONCURRENCY:
-        attempts.append(FALLBACK_FRAGMENT_DOWNLOAD_CONCURRENCY)
+    """优先高速分片；遇到平台 403/429 时退到低请求的稳定传输。"""
+    profiles = _youtube_download_profiles(ydl_options)
 
-    for attempt_index, concurrency in enumerate(attempts):
+    for attempt_index, (concurrency, chunk_size) in enumerate(profiles):
         current_options = dict(ydl_options)
         current_options["concurrent_fragment_downloads"] = concurrency
+        current_options["http_chunk_size"] = chunk_size
         try:
             return _run_ytdlp_download(url, current_options, cancel_callback)
         except DownloadStopped:
             raise
         except Exception as exc:
-            can_retry = attempt_index == 0 and len(attempts) > 1 and _is_fragment_rate_limit_error(exc)
+            can_retry = attempt_index + 1 < len(profiles) and _is_fragment_rate_limit_error(exc)
             if not can_retry:
                 raise
             raise_if_cancelled(cancel_callback)
+            next_concurrency, next_chunk_size = profiles[attempt_index + 1]
+            if next_concurrency == STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY and next_chunk_size == 0:
+                reason = "平台仍拒绝分片请求，已切换稳定单连接继续下载"
+            else:
+                reason = "平台限制高速分片，已自动降低并发并继续下载"
             progress_callback(
                 {
                     "status": "retrying",
-                    "reason": "平台限制并发，已自动降低分片并继续下载",
-                    "fragment_concurrency": FALLBACK_FRAGMENT_DOWNLOAD_CONCURRENCY,
+                    "reason": reason,
+                    "fragment_concurrency": next_concurrency,
+                    "http_chunk_size": next_chunk_size,
                 }
             )
 
@@ -558,15 +592,20 @@ def download_url(
     options.output_dir.mkdir(parents=True, exist_ok=True)
     before = _snapshot_files(options.output_dir)
 
-    ydl_options = build_ydl_options(
-        options,
-        progress_callback,
-        cancel_callback,
-        auth_platform=_auth_platform_for_url(url),
-    )
-    _apply_single_media_download_options(url, ydl_options)
-    _apply_bilibili_page_download_options(url, ydl_options)
+    auth_platform = _auth_platform_for_url(url)
+    managed_cookie_file: Path | None = None
     try:
+        if options.cookie_mode == AUTH_COOKIE_MODE and auth_platform:
+            managed_cookie_file = export_auth_cookies_txt(auth_platform)
+        ydl_options = build_ydl_options(
+            options,
+            progress_callback,
+            cancel_callback,
+            auth_platform=auth_platform,
+            managed_cookie_file=managed_cookie_file,
+        )
+        _apply_single_media_download_options(url, ydl_options)
+        _apply_bilibili_page_download_options(url, ydl_options)
         for attempt in range(YOUTUBE_PUBLIC_REQUEST_ATTEMPTS):
             try:
                 result_code = _download_with_adaptive_concurrency(
@@ -589,6 +628,9 @@ def download_url(
     except Exception as exc:
         if isinstance(exc, DownloadStopped):
             raise
+        youtube_unavailable_error = friendly_youtube_unavailable_error(exc)
+        if youtube_unavailable_error:
+            raise youtube_unavailable_error from exc
         youtube_auth_error = friendly_youtube_auth_error(exc)
         if youtube_auth_error:
             raise youtube_auth_error from exc
@@ -596,6 +638,8 @@ def download_url(
         if friendly_error:
             raise friendly_error from exc
         raise
+    finally:
+        release_auth_cookie_export(managed_cookie_file)
 
     after = _snapshot_files(options.output_dir)
     changed = _changed_files(before, after)

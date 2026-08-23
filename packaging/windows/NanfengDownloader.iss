@@ -11,7 +11,9 @@
 #define MyAppPublisher "南烛枫"
 #define MyAppExeName "南枫下载.exe"
 #define MyAppSourceDir "..\..\dist\南枫下载"
-#define MyAppOutputDir "..\..\installer\releases"
+#ifndef MyAppOutputDir
+  #define MyAppOutputDir "..\..\installer\releases"
+#endif
 
 [Setup]
 AppId={{D89A65BA-5F2E-4B16-A594-0DBE777162DB}
