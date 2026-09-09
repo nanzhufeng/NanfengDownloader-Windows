@@ -54,7 +54,7 @@ NanfengDownloader-Windows/
 ## 已验证基线
 
 - 当前 Windows Release：`v2026.09.09-windows`，资产及 SHA-256 见 [README](../README.md)。
-- 当前发布已验证 126 项自动测试、PyInstaller、Inno Setup 7 x64、随包 aria2、Node.js、FFmpeg、安装、启动和卸载；详见 `docs/releases/v2026.09.09-windows.md`。本地安装包实际携带 FFmpeg `n4.4.3-20221024`；云端工作流的 FFmpeg `9.0.1` 固定来源仍需在下一轮云端构建中统一验证，不能视为本地运行时已经升级。
+- 当前发布已验证 126 项自动测试、PyInstaller、Inno Setup 7 x64、随包 aria2、Node.js 和 FFmpeg `9.0.1` 的云端构建与 Release 上传；详见 `docs/releases/v2026.09.09-windows.md`。本地同源安装包已完成安装、启动和卸载验证，但本地包携带 FFmpeg `n4.4.3-20221024`，不能将该本地安装验证冒充为远端 `9.0.1` 资产的安装验证。
 - 五平台功能的真实服务验证按各自验证文档记录；外部平台、网络、地区和账号限制必须独立报告，不能由单元测试替代。
 - 当前源码的自动测试、编译检查和构建须由接手者在变更后重新执行，不能沿用旧 Release 的结果。
 
