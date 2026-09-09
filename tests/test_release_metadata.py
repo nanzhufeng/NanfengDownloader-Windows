@@ -49,11 +49,13 @@ class InstallerContractTests(unittest.TestCase):
         self.assertNotIn("CloseApplications=force", content)
         self.assertIn("CloseApplications=no", content)
 
-    def test_release_workflow_rejects_existing_tags_instead_of_clobbering_assets(self) -> None:
+    def test_release_workflow_only_resumes_existing_drafts_without_clobbering_assets(self) -> None:
         root = Path(__file__).resolve().parents[1]
         content = (root / ".github" / "workflows" / "release-windows.yml").read_text(encoding="utf-8")
 
         self.assertIn("already exists", content)
+        self.assertIn("RELEASE_DRAFT_EXISTS", content)
+        self.assertIn("--json isDraft", content)
         self.assertNotIn("--clobber", content)
         self.assertIn("release_metadata.py --tag", content)
 
