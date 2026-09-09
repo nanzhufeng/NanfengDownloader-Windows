@@ -76,6 +76,7 @@ class DouyinDownloadResilienceTests(unittest.TestCase):
             self.assertEqual(download.call_count, 2)
             self.assertEqual(len(result.files), 1)
             self.assertTrue(result.files[0].exists())
+            self.assertEqual(result.files[0].parent, Path(temp_dir) / "Douyin")
             self.assertTrue(any(item.get("status") == "retrying" for item in progress))
 
     def test_other_validation_errors_do_not_trigger_blind_redownload(self) -> None:

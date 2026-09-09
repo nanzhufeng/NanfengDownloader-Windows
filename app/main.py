@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import re
 import time
@@ -73,6 +74,8 @@ SETTINGS_ORGANIZATION = "Nanzhufeng"
 SETTING_COMPLETION_SOUND = "notifications/completion_sound_enabled"
 SETTING_RESULT_SUMMARY = "notifications/result_summary_enabled"
 SETTING_AUTO_REVEAL_OUTPUT = "completion/auto_reveal_output_enabled"
+SETTING_CREATOR_SUBFOLDERS = "output/organize_by_creator_enabled"
+SETTING_QUEUE_STATE = "workspace/download_queue_state_v1"
 QUALITY_OPTIONS = ["最佳画质", "1080p 及以下", "720p 及以下", "360p 及以下", "仅音频 MP3"]
 COL_INDEX = 0
 COL_SELECT = 1
@@ -352,6 +355,7 @@ class AppSettingsDialog(QDialog):
         completion_sound_enabled: bool,
         result_summary_enabled: bool,
         auto_reveal_output_enabled: bool,
+        creator_subfolders_enabled: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -391,7 +395,21 @@ class AppSettingsDialog(QDialog):
         self.auto_reveal_output_checkbox.setChecked(auto_reveal_output_enabled)
         self.auto_reveal_output_checkbox.setToolTip("全部成功时，使用列表“定位”同一方式，在资源管理器中选中最新完成的视频。")
         options_layout.addWidget(self.auto_reveal_output_checkbox)
+
+        self.creator_subfolders_checkbox = QCheckBox("按频道/作者分文件夹")
+        self.creator_subfolders_checkbox.setObjectName("CreatorSubfoldersCheckBox")
+        self.creator_subfolders_checkbox.setChecked(creator_subfolders_enabled)
+        self.creator_subfolders_checkbox.setToolTip("关闭时只按平台建文件夹；开启后，新下载文件再按频道或作者分目录。")
+        options_layout.addWidget(self.creator_subfolders_checkbox)
         layout.addWidget(options_panel)
+
+        review = QLabel(
+            "功能审阅：保留 Pornhub 公开单视频下载、重启恢复列表和可选作者目录；不新增常驻按键。"
+        )
+        review.setObjectName("AppSettingsHint")
+        review.setWordWrap(True)
+        review.setToolTip("会员、私密或 DRM 内容不纳入下载范围。")
+        layout.addWidget(review)
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
@@ -414,6 +432,9 @@ class AppSettingsDialog(QDialog):
 
     def auto_reveal_output_enabled(self) -> bool:
         return self.auto_reveal_output_checkbox.isChecked()
+
+    def creator_subfolders_enabled(self) -> bool:
+        return self.creator_subfolders_checkbox.isChecked()
 
 
 @dataclass
@@ -575,6 +596,10 @@ class MainWindow(QMainWindow):
             self.settings.value(SETTING_AUTO_REVEAL_OUTPUT, False),
             default=False,
         )
+        self.creator_subfolders_enabled = setting_as_bool(
+            self.settings.value(SETTING_CREATOR_SUBFOLDERS, False),
+            default=False,
+        )
         self.worker_thread: QThread | None = None
         self.worker: DownloadWorker | None = None
         self.discovery_thread: QThread | None = None
@@ -594,6 +619,12 @@ class MainWindow(QMainWindow):
         self.row_output_files: dict[int, list[Path]] = {}
         self.download_started_at: float | None = None
         self.latest_failure_detail = ""
+        self._restoring_queue = False
+        self._last_queue_state_json = ""
+        self.queue_persist_timer = QTimer(self)
+        self.queue_persist_timer.setSingleShot(True)
+        self.queue_persist_timer.setInterval(450)
+        self.queue_persist_timer.timeout.connect(self._persist_queue_state)
         self.network_check_timer = QTimer(self)
         self.network_check_timer.setInterval(8000)
         self.network_check_timer.timeout.connect(self._start_network_check)
@@ -611,6 +642,8 @@ class MainWindow(QMainWindow):
             self.login_tiktok_button,
         ):
             login_button.setFixedWidth(150)
+        self.table.itemChanged.connect(self._schedule_queue_persist)
+        self._restore_queue_state()
         self._update_cookie_file_state()
         self._update_status()
 
@@ -802,7 +835,7 @@ class MainWindow(QMainWindow):
         url_label.setObjectName("FieldLabel")
         self.url_text = QPlainTextEdit()
         self.url_text.setPlaceholderText(
-            "粘贴抖音、YouTube、哔哩哔哩、小红书或 TikTok 链接；支持作者/频道/UP 主主页，可一次多行。"
+            "粘贴抖音、YouTube、哔哩哔哩、小红书、TikTok 或 Pornhub 链接；支持作者/频道/UP 主主页，可一次多行。"
         )
         self.url_text.setFixedHeight(112)
 
@@ -1464,6 +1497,7 @@ class MainWindow(QMainWindow):
             self.completion_sound_enabled,
             self.result_summary_enabled,
             self.auto_reveal_output_enabled,
+            self.creator_subfolders_enabled,
             self,
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
@@ -1472,6 +1506,7 @@ class MainWindow(QMainWindow):
             completion_sound_enabled=dialog.completion_sound_enabled(),
             result_summary_enabled=dialog.result_summary_enabled(),
             auto_reveal_output_enabled=dialog.auto_reveal_output_enabled(),
+            creator_subfolders_enabled=dialog.creator_subfolders_enabled(),
         )
         self._show_settings_saved_message()
 
@@ -1483,6 +1518,7 @@ class MainWindow(QMainWindow):
         completion_sound_enabled: bool | None = None,
         result_summary_enabled: bool | None = None,
         auto_reveal_output_enabled: bool | None = None,
+        creator_subfolders_enabled: bool | None = None,
     ) -> None:
         if completion_sound_enabled is not None:
             self.completion_sound_enabled = bool(completion_sound_enabled)
@@ -1490,9 +1526,12 @@ class MainWindow(QMainWindow):
             self.result_summary_enabled = bool(result_summary_enabled)
         if auto_reveal_output_enabled is not None:
             self.auto_reveal_output_enabled = bool(auto_reveal_output_enabled)
+        if creator_subfolders_enabled is not None:
+            self.creator_subfolders_enabled = bool(creator_subfolders_enabled)
         self.settings.setValue(SETTING_COMPLETION_SOUND, self.completion_sound_enabled)
         self.settings.setValue(SETTING_RESULT_SUMMARY, self.result_summary_enabled)
         self.settings.setValue(SETTING_AUTO_REVEAL_OUTPUT, self.auto_reveal_output_enabled)
+        self.settings.setValue(SETTING_CREATOR_SUBFOLDERS, self.creator_subfolders_enabled)
         self.settings.sync()
 
     def _show_settings_saved_message(self) -> None:
@@ -1562,6 +1601,107 @@ class MainWindow(QMainWindow):
         self.url_text.setFocus()
         self.status_label.setText("链接输入框已清空。")
 
+    def _schedule_queue_persist(self, *_args: object) -> None:
+        """将频繁的进度/勾选变化合并为一次轻量本地写入。"""
+        if not self._restoring_queue:
+            self.queue_persist_timer.start()
+
+    def _queue_state_payload(self) -> dict[str, object]:
+        rows: list[dict[str, object]] = []
+        for row in range(self.table.rowCount()):
+            link_item = self.table.item(row, COL_LINK)
+            if not link_item or not link_item.text().strip():
+                continue
+            select_item = self.table.item(row, COL_SELECT)
+            status_item = self.table.item(row, COL_STATUS)
+            quality_widget = self.table.cellWidget(row, COL_QUALITY)
+            quality = quality_widget.currentText() if isinstance(quality_widget, QComboBox) else self.quality_combo.currentText()
+            rows.append(
+                {
+                    "url": link_item.text().strip(),
+                    "platform": self._cell_text(row, COL_PLATFORM),
+                    "creator": self._cell_text(row, COL_CREATOR),
+                    "quality": quality,
+                    "title": self._cell_text(row, COL_TITLE),
+                    "status": status_item.text() if status_item else "等待",
+                    "selected": bool(select_item and select_item.checkState() == Qt.Checked),
+                    "output_files": [str(path) for path in self.row_output_files.get(row, [])],
+                }
+            )
+        return {"version": 1, "rows": rows}
+
+    def _persist_queue_state(self) -> None:
+        if self._restoring_queue:
+            return
+        serialized = json.dumps(self._queue_state_payload(), ensure_ascii=False, separators=(",", ":"))
+        if serialized == self._last_queue_state_json:
+            return
+        self.settings.setValue(SETTING_QUEUE_STATE, serialized)
+        self.settings.sync()
+        self._last_queue_state_json = serialized
+
+    def _restore_queue_state(self) -> None:
+        raw_state = self.settings.value(SETTING_QUEUE_STATE, "")
+        if isinstance(raw_state, bytes):
+            raw_state = raw_state.decode("utf-8", errors="replace")
+        if not isinstance(raw_state, str) or not raw_state.strip():
+            return
+        try:
+            payload = json.loads(raw_state)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(payload, dict) or payload.get("version") != 1:
+            return
+        rows = payload.get("rows")
+        if not isinstance(rows, list):
+            return
+
+        self._restoring_queue = True
+        try:
+            for saved_row in rows[:2000]:
+                if not isinstance(saved_row, dict):
+                    continue
+                url = str(saved_row.get("url") or "").strip()
+                if not url or detect_platform(url) == "未知":
+                    continue
+                platform = str(saved_row.get("platform") or detect_platform(url))
+                creator = str(saved_row.get("creator") or "待解析")
+                title = str(saved_row.get("title") or "等待解析")
+                quality = str(saved_row.get("quality") or self.quality_combo.currentText())
+                if not self._add_queue_row(url, platform, title, creator_name=creator):
+                    continue
+                row = self.table.rowCount() - 1
+                quality_widget = self.table.cellWidget(row, COL_QUALITY)
+                if isinstance(quality_widget, QComboBox):
+                    quality_widget.setCurrentText(quality if quality in QUALITY_OPTIONS else self.quality_combo.currentText())
+
+                saved_status = str(saved_row.get("status") or "等待")
+                resumable = saved_status in {"下载中", "续传中", "等待联网", "已停止"}
+                restored_status = "等待" if resumable else saved_status
+                if restored_status not in {"等待", "完成", "已跳过", "失败"}:
+                    restored_status = "等待"
+                self._set_status_cell(row, restored_status)
+                self._set_cell(row, COL_PROGRESS, "0%" if restored_status == "等待" else "100%" if restored_status in {"完成", "已跳过"} else "0%")
+                self._set_cell(row, COL_SPEED, "-")
+                self._set_cell(row, COL_ETA, "-")
+
+                select_item = self.table.item(row, COL_SELECT)
+                selected = setting_as_bool(saved_row.get("selected"), default=True)
+                if select_item:
+                    select_item.setCheckState(
+                        Qt.Unchecked if restored_status in {"完成", "已跳过"} else Qt.Checked if (resumable or selected) else Qt.Unchecked
+                    )
+                output_files = saved_row.get("output_files")
+                if isinstance(output_files, list):
+                    self._set_row_output_files(row, output_files)
+        finally:
+            self._restoring_queue = False
+        self._last_queue_state_json = raw_state
+
+    def _cell_text(self, row: int, column: int) -> str:
+        item = self.table.item(row, column)
+        return item.text() if item else ""
+
     def _add_urls(self, text: str | None = None, show_message: bool = True) -> int:
         urls = split_urls(text if text is not None else self.url_text.toPlainText())
         if not urls:
@@ -1569,7 +1709,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self,
                     "没有发现链接",
-                    "请先粘贴抖音、YouTube、哔哩哔哩、小红书或 TikTok 链接。",
+                    "请先粘贴抖音、YouTube、哔哩哔哩、小红书、TikTok 或 Pornhub 链接。",
                 )
             return 0
 
@@ -1600,7 +1740,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "没有发现链接",
-                "请先粘贴抖音/TikTok 作者或作品链接、YouTube 频道或播放列表、B站 UP 主或小红书链接。",
+                "请先粘贴抖音/TikTok 作者或作品链接、YouTube 频道或播放列表、B站 UP 主、小红书或 Pornhub 链接。",
             )
             return
 
@@ -1663,6 +1803,7 @@ class MainWindow(QMainWindow):
         self._set_cell(row, COL_ETA, "-")
         self._set_cell(row, COL_LINK, url)
         self._set_locate_cell(row)
+        self._schedule_queue_persist()
         return True
 
     @Slot(object)
@@ -1853,6 +1994,7 @@ class MainWindow(QMainWindow):
         combo.addItems(QUALITY_OPTIONS)
         combo.setCurrentText(quality if quality in QUALITY_OPTIONS else self.quality_combo.currentText())
         combo.setObjectName("TableCombo")
+        combo.currentTextChanged.connect(self._schedule_queue_persist)
         self.table.setCellWidget(row, COL_QUALITY, combo)
 
     def _set_locate_cell(self, row: int) -> None:
@@ -1877,6 +2019,7 @@ class MainWindow(QMainWindow):
             button.setToolTip(f"打开目录并选中：{existing_paths[0].name}")
         else:
             button.setToolTip(f"该任务生成 {len(existing_paths)} 个文件；点击定位首个文件")
+        self._schedule_queue_persist()
 
     def _reveal_row_output(self, row: int) -> None:
         paths = self.row_output_files.get(row, [])
@@ -1943,6 +2086,7 @@ class MainWindow(QMainWindow):
             cookie_mode=AUTH_COOKIE_MODE,
             cookie_file=None,
             ffmpeg_dir=self.ffmpeg_dir,
+            organize_by_creator=self.creator_subfolders_enabled,
         )
 
     def _selected_download_rows(self) -> list[int]:
@@ -2160,6 +2304,12 @@ class MainWindow(QMainWindow):
         self.total_eta_label.setText("总剩余：--")
         self.load_more_button.setVisible(False)
         self._update_status()
+        self._persist_queue_state()
+
+    def closeEvent(self, event) -> None:
+        """窗口关闭前同步队列，避免定时写入尚未来得及触发时丢失最后一项。"""
+        self._persist_queue_state()
+        super().closeEvent(event)
 
     def _select_all_rows(self) -> None:
         for row in range(self.table.rowCount()):
@@ -2191,8 +2341,14 @@ class MainWindow(QMainWindow):
             self._set_row_status(row, "下载中")
             total = info.get("total_bytes") or info.get("total_bytes_estimate") or 0
             downloaded = info.get("downloaded_bytes") or 0
-            percent = int(downloaded * 100 / total) if total else 0
-            self._set_cell(row, COL_PROGRESS, f"{percent}%")
+            if total:
+                percent = max(0, min(99, int(downloaded * 100 / total)))
+                self._set_cell(row, COL_PROGRESS, f"{percent}%")
+            elif info.get("external_progress"):
+                # aria2 直链尚未提供文件总大小时，显示累计字节，不能伪造 0%。
+                self._set_cell(row, COL_PROGRESS, str(info.get("progress_label") or "下载中"))
+            else:
+                self._set_cell(row, COL_PROGRESS, "0%")
             self._set_cell(row, COL_SPEED, info.get("_speed_str", "-").strip())
             self._set_cell(row, COL_ETA, info.get("_eta_str", "-").strip())
         elif status == "retrying":

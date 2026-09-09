@@ -69,6 +69,23 @@ class NetworkRecoveryTests(unittest.TestCase):
         self.assertEqual(self.window.table.item(0, COL_PROGRESS).text(), "62%")
         self.assertIn("断点续传", self.window.status_label.text())
 
+    def test_external_download_without_total_does_not_lie_with_zero_percent(self) -> None:
+        self.window._on_item_progress(
+            0,
+            {
+                "status": "downloading",
+                "external_progress": True,
+                "downloaded_bytes": 1024,
+                "progress_label": "已下载 1.0KB",
+                "_speed_str": "1.0KB/s",
+                "_eta_str": "-",
+            },
+        )
+
+        self.assertEqual(self.window.table.item(0, COL_STATUS).text(), "下载中")
+        self.assertEqual(self.window.table.item(0, COL_PROGRESS).text(), "已下载 1.0KB")
+        self.assertEqual(self.window.table.item(0, COL_SPEED).text(), "1.0KB/s")
+
 
 if __name__ == "__main__":
     unittest.main()

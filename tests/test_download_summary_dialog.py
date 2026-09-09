@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtWidgets import QApplication, QDialog, QLabel
 
 from app.main import AppSettingsDialog, DownloadSummaryDialog, MainWindow
 
@@ -70,12 +70,18 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertFalse(dialog.completion_sound_enabled())
         self.assertTrue(dialog.result_summary_enabled())
         self.assertFalse(dialog.auto_reveal_output_enabled())
+        self.assertFalse(dialog.creator_subfolders_enabled())
+        feature_review = dialog.findChild(QLabel, "AppSettingsHint")
+        self.assertIsNotNone(feature_review)
+        self.assertIn("Pornhub 公开单视频下载", feature_review.text())
         dialog.completion_sound_checkbox.setChecked(True)
         dialog.result_summary_checkbox.setChecked(False)
         dialog.auto_reveal_output_checkbox.setChecked(True)
+        dialog.creator_subfolders_checkbox.setChecked(True)
         self.assertTrue(dialog.completion_sound_enabled())
         self.assertFalse(dialog.result_summary_enabled())
         self.assertTrue(dialog.auto_reveal_output_enabled())
+        self.assertTrue(dialog.creator_subfolders_enabled())
 
     def test_completion_sound_preference_persists_in_the_app_settings_store(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -86,10 +92,12 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                 self.assertTrue(window.completion_sound_enabled)
                 self.assertTrue(window.result_summary_enabled)
                 self.assertFalse(window.auto_reveal_output_enabled)
+                self.assertFalse(window.creator_subfolders_enabled)
                 window._set_completion_preferences(
                     completion_sound_enabled=False,
                     result_summary_enabled=False,
                     auto_reveal_output_enabled=True,
+                    creator_subfolders_enabled=True,
                 )
             finally:
                 window.close()
@@ -99,6 +107,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                 self.assertFalse(reloaded.completion_sound_enabled)
                 self.assertFalse(reloaded.result_summary_enabled)
                 self.assertTrue(reloaded.auto_reveal_output_enabled)
+                self.assertTrue(reloaded.creator_subfolders_enabled)
             finally:
                 reloaded.close()
 
@@ -112,6 +121,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                 dialog.completion_sound_enabled.return_value = False
                 dialog.result_summary_enabled.return_value = True
                 dialog.auto_reveal_output_enabled.return_value = True
+                dialog.creator_subfolders_enabled.return_value = True
 
                 window._open_settings()
 

@@ -31,6 +31,12 @@ for ffmpeg_dir in ffmpeg_candidates:
 else:
     raise SystemExit('没有找到 FFmpeg。请设置 NANFENG_FFMPEG_DIR，或放到 tools/ffmpeg。')
 
+aria2_dir = Path.cwd() / 'tools' / 'aria2'
+aria2_executable = aria2_dir / 'aria2c.exe'
+if not aria2_executable.is_file():
+    raise SystemExit('没有找到 aria2c.exe。请放到 tools/aria2。')
+datas.append((str(aria2_dir), 'tools/aria2'))
+
 local_app_data = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local'))
 configured_provider_build = os.environ.get('NANFENG_BGUTIL_BUILD')
 provider_build = Path(configured_provider_build) if configured_provider_build else (

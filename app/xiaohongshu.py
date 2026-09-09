@@ -564,10 +564,11 @@ def download_xiaohongshu_url(
 
     raise_if_cancelled(cancel_callback)
     info, referer = fetch_xiaohongshu_info(url, options, options.quality)
-    creator_dir = safe_path_name(options.creator_name or info.creator_name)
     file_name = _safe_file_name(info.title, f"小红书视频 {info.note_id}")
     publish_date = info.publish_date or "未知日期"
-    base_dir = options.output_dir / "Xiaohongshu" / creator_dir
+    base_dir = options.output_dir / "Xiaohongshu"
+    if options.organize_by_creator:
+        base_dir /= safe_path_name(options.creator_name or info.creator_name)
     final_target = base_dir / f"{publish_date} {file_name}.mp4"
     if options.quality == "仅音频 MP3":
         final_target = final_target.with_suffix(".mp3")

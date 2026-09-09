@@ -1410,8 +1410,10 @@ def download_douyin_url(
     info = _fetch_douyin_info(url, options)
     base_name = _safe_file_name(info.title, f"抖音视频 {info.aweme_id}")
     publish_date = info.publish_date or "未知日期"
-    creator_dir = safe_path_name(options.creator_name or info.author_name)
-    target = options.output_dir / "Douyin" / creator_dir / f"{publish_date} {base_name}.mp4"
+    base_dir = options.output_dir / "Douyin"
+    if options.organize_by_creator:
+        base_dir /= safe_path_name(options.creator_name or info.author_name)
+    target = base_dir / f"{publish_date} {base_name}.mp4"
     if options.quality == "仅音频 MP3":
         target = target.with_suffix(".mp3")
     if target.exists() and target.stat().st_size > 0:

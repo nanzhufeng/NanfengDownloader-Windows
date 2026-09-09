@@ -5,8 +5,10 @@ import re
 import shutil
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Event, Lock, Thread
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
@@ -36,6 +38,7 @@ STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY = 1
 DOWNLOAD_BUFFER_SIZE = 1024 * 1024
 HTTP_DOWNLOAD_CHUNK_SIZE = 10 * 1024 * 1024
 PROGRESS_UPDATE_INTERVAL = 0.2
+EXTERNAL_PROGRESS_STATE_KEY = "_nanfeng_external_progress_state"
 YOUTUBE_POT_PROVIDER_DIRECTORY = "bgutil-ytdlp-pot-provider"
 YOUTUBE_PUBLIC_REQUEST_ATTEMPTS = 2
 YOUTUBE_PUBLIC_RETRY_DELAY_SECONDS = 1.0
@@ -58,6 +61,7 @@ class DownloadOptions:
     cookie_file: Path | None
     ffmpeg_dir: Path | None
     creator_name: str | None = None
+    organize_by_creator: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,237 @@ class DownloadResult:
     files: list[Path]
     skipped: bool = False
     message: str = ""
+
+
+class _ExternalProgressState:
+    """保存 aria2 直链下载的总大小；由 yt-dlp 解析线程写入、采样线程读取。"""
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._total_bytes = 0
+        self._media_url = ""
+        self._http_headers: dict[str, str] = {}
+
+    def set_total_bytes(self, value: object) -> None:
+        try:
+            total = max(0, int(value or 0))
+        except (TypeError, ValueError):
+            total = 0
+        with self._lock:
+            self._total_bytes = total
+
+    def total_bytes(self) -> int:
+        with self._lock:
+            return self._total_bytes
+
+    def set_media_request(self, url: object, headers: object) -> None:
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            return
+        safe_headers = {
+            str(key): str(value)
+            for key, value in (headers.items() if isinstance(headers, dict) else [])
+            if str(key).casefold() not in {"range", "content-length"}
+        }
+        with self._lock:
+            self._media_url = url
+            self._http_headers = safe_headers
+
+    def media_request(self) -> tuple[str, dict[str, str]]:
+        with self._lock:
+            return self._media_url, dict(self._http_headers)
+
+
+def _external_download_total_bytes(info: dict[str, Any]) -> int:
+    """优先取得 yt-dlp 已选媒体流的精确体积，必要时使用近似值。"""
+    formats = info.get("requested_formats") or [info]
+    total = 0
+    for media_format in formats:
+        if not isinstance(media_format, dict):
+            continue
+        value = media_format.get("filesize") or media_format.get("filesize_approx")
+        try:
+            total += max(0, int(value or 0))
+        except (TypeError, ValueError):
+            continue
+    if total:
+        return total
+    try:
+        return max(0, int(info.get("filesize") or info.get("filesize_approx") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _format_transfer_size(value: float) -> str:
+    units = ("B", "KB", "MB", "GB")
+    amount = max(0.0, float(value))
+    for unit in units:
+        if amount < 1024 or unit == units[-1]:
+            return f"{amount:.1f}{unit}" if unit != "B" else f"{int(amount)}B"
+        amount /= 1024
+    return "0B"
+
+
+def _format_transfer_eta(seconds: float) -> str:
+    total_seconds = max(0, int(seconds))
+    minutes, sec = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}时{minutes:02d}分"
+    if minutes:
+        return f"{minutes}分{sec:02d}秒"
+    return f"{sec}秒"
+
+
+def _content_length_from_headers(headers: Any, *, range_request: bool) -> int:
+    content_range = str(headers.get("Content-Range") or "")
+    match = re.search(r"/(\d+)\s*$", content_range)
+    if match:
+        return int(match.group(1))
+    if range_request:
+        return 0
+    try:
+        return max(0, int(headers.get("Content-Length") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _probe_direct_media_total_bytes(url: str, headers: dict[str, str]) -> int:
+    """不下载正文，只用 HEAD/首字节 Range 取得直链媒体总大小。"""
+    if not url:
+        return 0
+    for method, range_request in (("HEAD", False), ("GET", True)):
+        request_headers = dict(headers)
+        if range_request:
+            request_headers["Range"] = "bytes=0-0"
+        request = urllib.request.Request(url, headers=request_headers, method=method)
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                total = _content_length_from_headers(response.headers, range_request=range_request)
+                if total:
+                    return total
+                if range_request:
+                    response.read(1)
+        except Exception:
+            continue
+    return 0
+
+
+class _ExternalDirectProgressMonitor:
+    """补齐 yt-dlp 外部 aria2 直链下载过程没有 progress hook 的缺口。"""
+
+    POLL_INTERVAL_SECONDS = 0.4
+    # NTFS 的文件修改时间可能比 Python 记录的启动纳秒时间略早；不给容差会漏掉刚生成的 .part。
+    PART_FILE_DISCOVERY_GRACE_SECONDS = 5
+
+    def __init__(
+        self,
+        output_dir: Path,
+        state: _ExternalProgressState,
+        progress_callback: ProgressCallback,
+        cancel_callback: CancelCallback | None,
+    ) -> None:
+        self.output_dir = output_dir
+        self.state = state
+        self.progress_callback = progress_callback
+        self.cancel_callback = cancel_callback
+        self.started_at_ns = time.time_ns()
+        self._stop_event = Event()
+        self._thread: Thread | None = None
+        self._active_path: Path | None = None
+        self._last_size = 0
+        self._last_speed = 0.0
+        self._last_sample_at = time.monotonic()
+        self._total_probe_started = False
+
+    def start(self) -> None:
+        self._thread = Thread(target=self._run, name="NanfengAria2Progress", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+
+    def _find_active_part_file(self) -> Path | None:
+        if self._active_path and self._active_path.is_file():
+            return self._active_path
+        if not self.output_dir.is_dir():
+            return None
+        candidates: list[Path] = []
+        minimum_mtime_ns = self.started_at_ns - int(self.PART_FILE_DISCOVERY_GRACE_SECONDS * 1_000_000_000)
+        try:
+            for candidate in self.output_dir.rglob("*.part"):
+                try:
+                    if candidate.is_file() and candidate.stat().st_mtime_ns >= minimum_mtime_ns:
+                        candidates.append(candidate)
+                except OSError:
+                    continue
+        except OSError:
+            return None
+        if not candidates:
+            return None
+        self._active_path = max(candidates, key=lambda candidate: candidate.stat().st_mtime_ns)
+        self._last_size = 0
+        self._last_speed = 0.0
+        self._last_sample_at = time.monotonic()
+        return self._active_path
+
+    def _start_total_probe_if_needed(self) -> None:
+        if self._total_probe_started or self.state.total_bytes() > 0:
+            return
+        url, headers = self.state.media_request()
+        if not url:
+            return
+        self._total_probe_started = True
+
+        def probe() -> None:
+            total = _probe_direct_media_total_bytes(url, headers)
+            if total:
+                self.state.set_total_bytes(total)
+
+        Thread(target=probe, name="NanfengAria2Length", daemon=True).start()
+
+    def sample_progress(self) -> dict[str, Any] | None:
+        part_file = self._find_active_part_file()
+        if not part_file:
+            return None
+        try:
+            downloaded = part_file.stat().st_size
+        except OSError:
+            self._active_path = None
+            return None
+
+        now = time.monotonic()
+        elapsed = max(now - self._last_sample_at, 0.001)
+        sampled_speed = max(0.0, (downloaded - self._last_size) / elapsed)
+        if sampled_speed > 0:
+            self._last_speed = sampled_speed
+        self._last_size = downloaded
+        self._last_sample_at = now
+        self._start_total_probe_if_needed()
+        total = self.state.total_bytes()
+        event: dict[str, Any] = {
+            "status": "downloading",
+            "downloaded_bytes": downloaded,
+            "progress_label": f"已下载 {_format_transfer_size(downloaded)}",
+            "_speed_str": f"{_format_transfer_size(self._last_speed)}/s" if self._last_speed else "测速中",
+            "_eta_str": "-",
+            "external_progress": True,
+        }
+        if total > 0:
+            event["total_bytes"] = total
+            if self._last_speed > 0 and downloaded < total:
+                event["_eta_str"] = _format_transfer_eta((total - downloaded) / self._last_speed)
+        return event
+
+    def _run(self) -> None:
+        while not self._stop_event.is_set():
+            if self.cancel_callback and self.cancel_callback():
+                return
+            event = self.sample_progress()
+            if event:
+                self.progress_callback(event)
+            self._stop_event.wait(self.POLL_INTERVAL_SECONDS)
 
 
 def split_urls(text: str) -> list[str]:
@@ -107,7 +342,21 @@ def detect_platform(url: str) -> str:
         return "小红书"
     if url_host_matches(url, "tiktok.com"):
         return "TikTok"
+    if url_host_matches(url, "pornhub.com"):
+        return "Pornhub"
     return "未知"
+
+
+SUPPORTED_PLATFORM_LABELS = ("抖音", "YouTube", "哔哩哔哩", "小红书", "TikTok", "Pornhub")
+
+
+def assert_supported_platform_url(url: str) -> str:
+    """拒绝未纳入产品范围的站点，避免误走软件内登录分支。"""
+    platform = detect_platform(url)
+    if platform == "未知":
+        names = "、".join(SUPPORTED_PLATFORM_LABELS)
+        raise RuntimeError(f"当前版本仅支持 {names} 链接，暂不支持此平台。")
+    return platform
 
 
 def _auth_platform_for_url(url: str) -> str | None:
@@ -199,6 +448,52 @@ def find_node_runtime() -> Path | None:
     return Path(node_path) if node_path else None
 
 
+def find_aria2c() -> Path | None:
+    """查找随软件分发的 aria2；只作为 HTTP(S) 直链加速器使用。"""
+    aria2_name = "aria2c.exe" if os.name == "nt" else "aria2c"
+    configured = os.environ.get("NANFENG_ARIA2C")
+    candidates: list[Path] = [Path(configured)] if configured else []
+    for root in _runtime_resource_roots():
+        candidates.extend(
+            (
+                root / "tools" / "aria2" / aria2_name,
+                root / "tools" / aria2_name,
+            )
+        )
+
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    aria2_path = shutil.which(aria2_name)
+    return Path(aria2_path) if aria2_path else None
+
+
+def build_direct_http_acceleration_options(platform: str | None) -> dict[str, Any]:
+    """只加速可恢复的直链，绝不把 aria2 用到 HLS/DASH 清单。"""
+    if platform != "Pornhub":
+        return {}
+    aria2c = find_aria2c()
+    if not aria2c:
+        return {}
+    return {
+        # yt-dlp 会按协议选择下载器。清单流固定走 native，避免 aria2 输入清单风险。
+        "external_downloader": {
+            "http": str(aria2c),
+            "https": str(aria2c),
+            "m3u8": "native",
+            "dash": "native",
+        },
+        "external_downloader_args": {
+            "aria2c": [
+                "--max-connection-per-server=16",
+                "--split=16",
+                "--min-split-size=8M",
+                "--file-allocation=none",
+            ]
+        },
+    }
+
+
 def youtube_pot_provider_ready() -> bool:
     return (youtube_pot_provider_home() / "build" / "generate_once.js").exists()
 
@@ -230,14 +525,18 @@ def build_ydl_options(
     cancel_callback: CancelCallback | None = None,
     auth_platform: str | None = None,
     managed_cookie_file: Path | None = None,
+    download_platform: str | None = None,
 ) -> dict[str, Any]:
     def checked_progress(info: dict[str, Any]) -> None:
         raise_if_cancelled(cancel_callback)
         progress_callback(info)
         raise_if_cancelled(cancel_callback)
 
-    creator_dir = safe_path_name(options.creator_name) if options.creator_name else "%(uploader|未知作者).80B"
-    output_template = str(options.output_dir / "%(extractor_key)s" / creator_dir / "%(upload_date)s %(title).120B.%(ext)s")
+    relative_dir = Path("%(extractor_key)s")
+    if options.organize_by_creator:
+        creator_dir = safe_path_name(options.creator_name) if options.creator_name else "%(uploader|未知作者).80B"
+        relative_dir /= creator_dir
+    output_template = str(options.output_dir / relative_dir / "%(upload_date)s %(title).120B.%(ext)s")
     ydl_options: dict[str, Any] = {
         "outtmpl": output_template,
         "format": build_format_selector(options.quality),
@@ -257,7 +556,35 @@ def build_ydl_options(
         "quiet": True,
         "no_warnings": False,
     }
-    ydl_options.update(build_youtube_runtime_options())
+    if download_platform == "YouTube":
+        ydl_options.update(build_youtube_runtime_options())
+    ydl_options.update(build_direct_http_acceleration_options(download_platform))
+    if ydl_options.get("external_downloader"):
+        progress_state = _ExternalProgressState()
+
+        def capture_external_total(info: dict[str, Any], *, incomplete: bool = False) -> None:
+            if not incomplete:
+                progress_state.set_total_bytes(_external_download_total_bytes(info))
+                media_info = info
+                requested_formats = info.get("requested_formats")
+                if isinstance(requested_formats, list):
+                    media_info = next(
+                        (
+                            media_format
+                            for media_format in requested_formats
+                            if isinstance(media_format, dict) and media_format.get("url")
+                        ),
+                        info,
+                    )
+                if isinstance(media_info, dict):
+                    progress_state.set_media_request(
+                        media_info.get("url"),
+                        media_info.get("http_headers") or info.get("http_headers"),
+                    )
+            return None
+
+        ydl_options[EXTERNAL_PROGRESS_STATE_KEY] = progress_state
+        ydl_options["match_filter"] = capture_external_total
 
     if options.ffmpeg_dir:
         ydl_options["ffmpeg_location"] = str(options.ffmpeg_dir)
@@ -278,7 +605,7 @@ def build_ydl_options(
             }
         ]
 
-    if options.cookie_mode == AUTH_COOKIE_MODE:
+    if options.cookie_mode == AUTH_COOKIE_MODE and auth_platform:
         cookie_file = managed_cookie_file or export_auth_cookies_txt(auth_platform)
         ydl_options["cookiefile"] = str(cookie_file)
     elif options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
@@ -431,11 +758,30 @@ def _run_ytdlp_download(
 ) -> int | None:
     from yt_dlp import YoutubeDL
 
-    with YoutubeDL(ydl_options) as ydl:
-        raise_if_cancelled(cancel_callback)
-        result_code = ydl.download([url])
-        raise_if_cancelled(cancel_callback)
-        return result_code
+    runtime_options = dict(ydl_options)
+    progress_state = runtime_options.pop(EXTERNAL_PROGRESS_STATE_KEY, None)
+    output_template = str(runtime_options.get("outtmpl") or "")
+    output_directory = Path(output_template.split("%(", 1)[0]) if "%(" in output_template else Path(output_template).parent
+    monitor: _ExternalDirectProgressMonitor | None = None
+    if isinstance(progress_state, _ExternalProgressState) and runtime_options.get("external_downloader"):
+        progress_hooks = runtime_options.get("progress_hooks") or []
+        progress_callback = progress_hooks[0] if progress_hooks else (lambda _info: None)
+        monitor = _ExternalDirectProgressMonitor(
+            output_directory,
+            progress_state,
+            progress_callback,
+            cancel_callback,
+        )
+        monitor.start()
+    try:
+        with YoutubeDL(runtime_options) as ydl:
+            raise_if_cancelled(cancel_callback)
+            result_code = ydl.download([url])
+            raise_if_cancelled(cancel_callback)
+            return result_code
+    finally:
+        if monitor:
+            monitor.stop()
 
 
 def _download_with_adaptive_concurrency(
@@ -446,6 +792,7 @@ def _download_with_adaptive_concurrency(
 ) -> int | None:
     """优先高速分片；遇到平台 403/429 时退到低请求的稳定传输。"""
     profiles = _youtube_download_profiles(ydl_options)
+    acceleration_enabled = bool(ydl_options.get("external_downloader"))
 
     for attempt_index, (concurrency, chunk_size) in enumerate(profiles):
         current_options = dict(ydl_options)
@@ -456,6 +803,25 @@ def _download_with_adaptive_concurrency(
         except DownloadStopped:
             raise
         except Exception as exc:
+            if acceleration_enabled:
+                # 直链站点不接受多连接或 Range 时，立即退回原生下载，避免长时间卡住。
+                acceleration_enabled = False
+                native_options = dict(ydl_options)
+                native_options.pop("external_downloader", None)
+                native_options.pop("external_downloader_args", None)
+                native_options.pop(EXTERNAL_PROGRESS_STATE_KEY, None)
+                native_options.pop("match_filter", None)
+                native_options["concurrent_fragment_downloads"] = STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY
+                native_options["http_chunk_size"] = 0
+                progress_callback(
+                    {
+                        "status": "retrying",
+                        "reason": "高速直连被站点限制，已切换兼容下载继续。",
+                        "fragment_concurrency": STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY,
+                        "http_chunk_size": 0,
+                    }
+                )
+                return _run_ytdlp_download(url, native_options, cancel_callback)
             can_retry = attempt_index + 1 < len(profiles) and _is_fragment_rate_limit_error(exc)
             if not can_retry:
                 raise
@@ -579,10 +945,11 @@ def download_url(
 
     这里延迟导入 yt_dlp，方便界面启动时给出清晰的依赖缺失提示。
     """
+    raise_if_cancelled(cancel_callback)
+    platform = assert_supported_platform_url(url)
+
     from .douyin import download_douyin_url, is_douyin_url
     from .xiaohongshu import download_xiaohongshu_url, is_xiaohongshu_url
-
-    raise_if_cancelled(cancel_callback)
 
     if is_douyin_url(url):
         return download_douyin_url(url, options, progress_callback, cancel_callback)
@@ -603,6 +970,7 @@ def download_url(
             cancel_callback,
             auth_platform=auth_platform,
             managed_cookie_file=managed_cookie_file,
+            download_platform=platform,
         )
         _apply_single_media_download_options(url, ydl_options)
         _apply_bilibili_page_download_options(url, ydl_options)

@@ -1,6 +1,6 @@
 # 南枫下载
 
-面向个人批量工作流的抖音 / YouTube / 哔哩哔哩 / 小红书 / TikTok Windows 桌面下载工具。当前源码使用 Python、PySide6、yt-dlp、Playwright 和 FFmpeg。
+面向个人批量工作流的抖音 / YouTube / 哔哩哔哩 / 小红书 / TikTok / Pornhub Windows 桌面下载工具。当前源码使用 Python、PySide6、yt-dlp、Playwright 和 FFmpeg。
 
 当前技术栈、目录职责、发布状态和接手说明见 [docs/context.md](docs/context.md)；正式开发经验、证据矩阵与回归门槛见 [docs/app-development-experience-audit.md](docs/app-development-experience-audit.md)。
 
@@ -10,7 +10,7 @@
 
 ## 下载安装
 
-当前可下载正式版为 [v2026.08.23.1](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.08.23.1-windows)。该 Windows 安装包由 Inno Setup 7 x64 构建，并已完成本地安装、运行时、启动与卸载验证。
+当前可下载正式版为 [v2026.09.09](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.09-windows)。该 Windows 安装包由 Inno Setup 7 x64 构建，并已完成本地安装、运行时、启动与卸载验证。
 
 安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
@@ -27,12 +27,13 @@
 - 智能识别抖音、YouTube、哔哩哔哩、小红书和 TikTok 的单视频及作者/频道/UP 主链接；支持包含短链的 Mac/移动端抖音分享文本，B站多 P 选集会展开为可勾选的独立队列项。
 - TikTok 支持单视频、分享文本和作者主页，使用独立软件内登录资料，列表只保留目标作者作品。
 - 小红书只把视频笔记加入队列，图文笔记不会伪装成视频；作者页被平台遮蔽时会明确提示软件内登录。
+- Pornhub 支持公开单视频链接直接入队；不承诺会员、私密或 DRM 内容，也不把该站链接误交给 YouTube 解析。
 - 下载完成后可在对应队列行点击“定位”，直接打开 Windows 资源管理器并选中该任务的准确输出文件。
 - 链接输入区提供独立“清空链接”按钮，只清空输入内容，不影响已经读取的下载队列。
 - 单视频只加入一条；集合链接读取可勾选作品列表。
 - 支持最佳画质、1080p、720p、360p 和仅音频 MP3。
 - 支持每行单独修改分辨率、全选、反选和执行前重新检查勾选。
-- 按平台和作者建立目录，文件名优先使用发布时间加标题。
+- 默认只按平台建立目录，文件名优先使用发布时间加标题；可在设置中开启按频道/作者分文件夹。
 - 快速跳过本地已有有效媒体。
 - 显示进度、速度、剩余时间、等待联网、失败、停止、跳过和完成状态。
 - 网络恢复后自动继续；停止信号会中断 yt-dlp 进度回调、抖音分块读取和 FFmpeg 子进程。

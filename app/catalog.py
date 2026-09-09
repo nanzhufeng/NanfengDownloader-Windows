@@ -9,6 +9,7 @@ from typing import Any
 from .auth_profile import AUTH_COOKIE_MODE, export_auth_cookies_txt, release_auth_cookie_export
 from .downloader import (
     DownloadOptions,
+    assert_supported_platform_url,
     build_youtube_runtime_options,
     friendly_youtube_auth_error,
     should_retry_public_youtube_request,
@@ -229,6 +230,17 @@ def discover_youtube_items(url: str, options: DownloadOptions, max_items: int = 
         release_auth_cookie_export(managed_cookie_file)
 
 
+def discover_pornhub_items(url: str) -> list[CatalogItem]:
+    """单视频直接入队，避免把该站链接误交给 YouTube 列表解析。"""
+    return [
+        CatalogItem(
+            platform="Pornhub",
+            title="Pornhub 视频（下载时解析）",
+            url=url,
+        )
+    ]
+
+
 def discover_links(text: str, options: DownloadOptions, max_items: int = 500) -> list[CatalogItem]:
     """把用户粘贴的作者页、频道、播放列表或单条链接解析成可勾选的视频列表。"""
     from .bilibili import discover_bilibili_items, is_bilibili_url
@@ -239,7 +251,10 @@ def discover_links(text: str, options: DownloadOptions, max_items: int = 500) ->
     discovered: list[CatalogItem] = []
     seen: set[str] = set()
     for url in split_urls(text):
-        if is_douyin_url(url):
+        platform = assert_supported_platform_url(url)
+        if platform == "Pornhub":
+            items = discover_pornhub_items(url)
+        elif is_douyin_url(url):
             items = discover_douyin_author_items(url, options, max_items=max_items)
         elif is_bilibili_url(url):
             items = discover_bilibili_items(url, options, max_items=max_items)

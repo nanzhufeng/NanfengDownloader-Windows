@@ -4,11 +4,43 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.douyin import _run_ffmpeg
-from app.downloader import DownloadOptions, DownloadResult, DownloadStopped, build_ydl_options
+from app.downloader import (
+    DownloadOptions,
+    DownloadResult,
+    DownloadStopped,
+    assert_supported_platform_url,
+    build_ydl_options,
+)
 from app.main import DownloadWorker, QueueItem
 
 
 class DownloadCancellationTests(unittest.TestCase):
+    def test_unknown_platform_is_rejected_with_supported_platform_message(self) -> None:
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "当前版本仅支持 抖音、YouTube、哔哩哔哩、小红书、TikTok、Pornhub 链接",
+        ):
+            assert_supported_platform_url("https://unsupported.example/video/1")
+
+    def test_unknown_platform_does_not_export_a_managed_cookie(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            options = DownloadOptions(
+                output_dir=Path(temp_dir),
+                quality="360p 及以下",
+                cookie_mode="软件内登录",
+                cookie_file=None,
+                ffmpeg_dir=None,
+            )
+            with patch("app.downloader.export_auth_cookies_txt") as export_cookie:
+                ydl_options = build_ydl_options(
+                    options,
+                    lambda info: None,
+                    auth_platform=None,
+                )
+
+        export_cookie.assert_not_called()
+        self.assertNotIn("cookiefile", ydl_options)
+
     def test_ytdlp_progress_hook_interrupts_current_download(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             options = DownloadOptions(
