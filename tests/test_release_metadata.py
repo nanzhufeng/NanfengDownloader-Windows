@@ -47,7 +47,8 @@ class InstallerContractTests(unittest.TestCase):
         self.assertIn("#ifndef MyAppVersion", content)
         self.assertIn("#ifndef MyOutputVersion", content)
         self.assertNotIn("CloseApplications=force", content)
-        self.assertIn("CloseApplications=no", content)
+        self.assertIn("CloseApplications=yes", content)
+        self.assertIn("RestartApplications=no", content)
 
     def test_release_workflow_only_resumes_existing_drafts_without_clobbering_assets(self) -> None:
         root = Path(__file__).resolve().parents[1]
