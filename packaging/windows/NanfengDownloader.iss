@@ -34,7 +34,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=no
+CloseApplications=yes
 RestartApplications=no
 VersionInfoVersion={#MyVersionInfo}
 VersionInfoCompany={#MyAppPublisher}
@@ -47,6 +47,11 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 
 [Files]
 Source: "{#MyAppSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+; Older builds accidentally bundled Poppler ICU, shadowing the Windows ICU API.
+Type: files; Name: "{app}\_internal\icuuc.dll"
+Type: files; Name: "{app}\_internal\icudt78.dll"
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

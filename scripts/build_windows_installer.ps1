@@ -18,11 +18,18 @@ if (-not $iscc) {
 }
 
 Push-Location $projectRoot
+$originalPath = $env:PATH
 try {
     Write-Output "Inno compiler: $iscc"
     if ($CheckCompilerOnly) {
         return
     }
+
+    # Keep unrelated native DLLs (for example Poppler ICU) out of dependency discovery.
+    $pythonExecutable = (Get-Command python -CommandType Application | Select-Object -First 1).Source
+    $pythonDirectory = Split-Path -Parent $pythonExecutable
+    $env:PATH = @($pythonDirectory, (Join-Path $pythonDirectory 'Scripts'),
+        (Join-Path $env:SystemRoot 'System32'), $env:SystemRoot) -join ';'
 
     if ([string]::IsNullOrWhiteSpace($Version)) {
         throw "Version is required. Example: -Version 2026.08.21"
@@ -57,6 +64,8 @@ try {
         throw "PyInstaller build failed."
     }
 
+    & (Join-Path $PSScriptRoot 'verify_windows_startup.ps1')
+
     $buildOutputDirectory = Join-Path $releaseDirectory ("work\{0}-{1}" -f $metadata.output_version, [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $buildOutputDirectory -Force | Out-Null
     & $iscc "/DMyAppVersion=$($metadata.app_version)" "/DMyVersionInfo=$($metadata.version_info)" "/DMyOutputVersion=$($metadata.output_version)" "/DMyAppOutputDir=$buildOutputDirectory" "packaging\windows\NanfengDownloader.iss"
@@ -77,5 +86,6 @@ try {
     Write-Output "SHA-256: $($hash.Hash)"
 }
 finally {
+    $env:PATH = $originalPath
     Pop-Location
 }

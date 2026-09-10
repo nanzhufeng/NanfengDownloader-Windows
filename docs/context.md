@@ -53,6 +53,8 @@ NanfengDownloader-Windows/
 
 ## 已验证基线
 
+- 2026-09-10 本地启动修复：`2026.09.10.1` 已构建并覆盖安装验证，解决宿主 Poppler ICU 被错误打包造成的 QtCore 导入失败；176 项测试通过，未上传 GitHub。证据见 [启动修复记录](verification/qtcore-startup-20260910.md)。下列远端发布信息属于原有记录。
+
 - 当前 Windows Release：`v2026.09.09-windows`，资产及 SHA-256 见 [README](../README.md)。
 - 当前发布已验证 126 项自动测试、PyInstaller、Inno Setup 7 x64、随包 aria2、Node.js 和 FFmpeg `9.0.1` 的云端构建与 Release 上传；详见 `docs/releases/v2026.09.09-windows.md`。本地同源安装包已完成安装、启动和卸载验证，但本地包携带 FFmpeg `n4.4.3-20221024`，不能将该本地安装验证冒充为远端 `9.0.1` 资产的安装验证。
 - 五平台功能的真实服务验证按各自验证文档记录；外部平台、网络、地区和账号限制必须独立报告，不能由单元测试替代。
