@@ -10,7 +10,7 @@
 
 ## 下载安装
 
-当前发布版本为 [v2026.09.10](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.10-windows)，使用 Inno Setup 7 构建。改进合集读取、真实画质命名和种子拖入；磁力链接及 BT 公网验收限制见[发布说明](docs/release-2026.09.10.md)。
+当前发布版本为 [v2026.09.10.1](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.10.1-windows)，使用 Inno Setup 7 构建。修复 QtCore DLL 启动报错，升级时检测运行中的程序并提示关闭；磁力链接及 BT 公网验收限制见[发布说明](docs/release-2026.09.10.1.md)。
 
 安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
