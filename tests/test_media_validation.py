@@ -111,7 +111,7 @@ class MediaValidationTests(unittest.TestCase):
 
             self.assertIn("Invalid data found when processing input", str(caught.exception))
 
-    def test_invalid_new_file_is_removed_before_success(self) -> None:
+    def test_invalid_file_is_rejected_without_deleting_it(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             target = Path(temp_dir) / "fake.mp4"
             target.write_text("<html>not media</html>", encoding="utf-8")
@@ -119,7 +119,7 @@ class MediaValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "网页或接口文本"):
                 _validated_media_files([target], None)
 
-            self.assertFalse(target.exists())
+            self.assertTrue(target.exists())
 
     def test_packet_scan_timeout_scales_for_large_files_and_is_capped(self) -> None:
         self.assertEqual(packet_scan_timeout_seconds(1), 20.0)

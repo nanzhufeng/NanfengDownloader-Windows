@@ -284,10 +284,37 @@ def migrate_legacy_browser_profile_cookies() -> int:
     return migrated
 
 
+def _export_owner_exited(file_path: Path) -> bool:
+    suffix = file_path.name.removeprefix(RUNTIME_COOKIE_PREFIX)
+    owner = suffix.split('-', 1)[0]
+    if not owner.isdigit() or os.name != 'nt':
+        return False  # Legacy/unknown ownership must not be guessed.
+    pid = int(owner)
+    if pid <= 0 or pid == os.getpid():
+        return False
+    from ctypes import wintypes
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    handle = kernel.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return ctypes.get_last_error() == 87  # Access denied is not proof of exit.
+    try:
+        code = wintypes.DWORD()
+        return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value != 259
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def cleanup_runtime_cookie_exports() -> None:
     """删除已失效或上次异常退出遗留的短时明文 Cookie 文件。"""
     directory = runtime_cookie_dir()
     for file_path in directory.glob(f"{RUNTIME_COOKIE_PREFIX}*.txt"):
+        # Only this process owns its exports. Never unlink another running instance's session.
+        if file_path not in _RUNTIME_COOKIE_EXPORTS and not _export_owner_exited(file_path):
+            continue
         try:
             file_path.unlink()
         except OSError:
@@ -595,7 +622,7 @@ def export_auth_cookies_txt(platform: str | None = None) -> Path:
         cookie_text = _latest_cookie_text(platform)
     if not cookie_text:
         raise RuntimeError(f"{platform} 尚未保存软件内登录 Cookie。")
-    target = runtime_cookie_dir() / f"{RUNTIME_COOKIE_PREFIX}{platform}-{uuid.uuid4().hex}.txt"
+    target = runtime_cookie_dir() / f"{RUNTIME_COOKIE_PREFIX}{os.getpid()}-{platform}-{uuid.uuid4().hex}.txt"
     target.write_text(cookie_text, encoding="utf-8")
     _RUNTIME_COOKIE_EXPORTS.add(target)
     return target

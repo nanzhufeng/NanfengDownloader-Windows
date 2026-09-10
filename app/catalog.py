@@ -262,12 +262,20 @@ def discover_links(text: str, options: DownloadOptions, max_items: int = 500) ->
             items = discover_xiaohongshu_items(url, options, max_items=max_items)
         elif is_tiktok_url(url):
             items = discover_tiktok_items(url, options, max_items=max_items)
-        else:
+        elif platform == "YouTube":
             items = discover_youtube_items(url, options, max_items=max_items)
+        else:
+            # Resolve once at download time; do not send unfamiliar sites to YouTube.
+            from urllib.parse import urlparse
+            from .web_collection import discover_collection
+            collection = discover_collection(url, max_items)
+            items = collection if collection is not None else [CatalogItem(platform="其他网站", title="网页媒体（下载时解析）", url=url,
+                                 creator_name=urlparse(url).hostname)]
 
         for item in items:
             if item.url in seen:
                 continue
             seen.add(item.url)
             discovered.append(item)
-    return discovered
+    from .catalog_rules import normalize_catalog_items
+    return normalize_catalog_items(discovered)

@@ -351,11 +351,13 @@ SUPPORTED_PLATFORM_LABELS = ("抖音", "YouTube", "哔哩哔哩", "小红书", "
 
 
 def assert_supported_platform_url(url: str) -> str:
-    """拒绝未纳入产品范围的站点，避免误走软件内登录分支。"""
+    """验证网络入口；未知网站交给通用提取器，不借用其他平台登录态。"""
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise RuntimeError("请输入不含账号密码的 HTTP/HTTPS 网站链接。")
     platform = detect_platform(url)
     if platform == "未知":
-        names = "、".join(SUPPORTED_PLATFORM_LABELS)
-        raise RuntimeError(f"当前版本仅支持 {names} 链接，暂不支持此平台。")
+        return "其他网站"
     return platform
 
 
@@ -367,6 +369,23 @@ def _auth_platform_for_url(url: str) -> str | None:
         "哔哩哔哩": "bilibili",
         "TikTok": "tiktok",
     }.get(platform)
+
+
+def normalize_vimeo_download_url(url: str) -> str:
+    """Use Vimeo's public player for numeric work pages; preserve unlisted hashes."""
+    if not url_host_matches(url, "vimeo.com"):
+        return url
+    parsed = urlparse(url)
+    if parsed.hostname not in {"vimeo.com", "www.vimeo.com"}:
+        return url
+    match = re.fullmatch(r"/(\d+)(?:/([A-Za-z0-9]+))?/?", parsed.path)
+    if not match:
+        return url
+    from urllib.parse import urlencode
+    values = parse_qs(parsed.query)
+    token = match.group(2) or (values.get("h") or [None])[0]
+    suffix = "?" + urlencode({"h": token}) if token else ""
+    return f"https://player.vimeo.com/video/{match.group(1)}{suffix}"
 
 
 def find_ffmpeg_dir(project_root: Path) -> Path | None:
@@ -392,10 +411,12 @@ def find_ffmpeg_dir(project_root: Path) -> Path | None:
 def build_format_selector(quality: str) -> str:
     if quality == "仅音频 MP3":
         return "bestaudio/best"
-    return (
-        "bv[protocol^=https][ext=mp4]+ba[protocol^=https][ext=m4a]/"
-        "bv[ext=mp4]+ba[ext=m4a]/bv+ba/b[ext=mp4]/best"
-    )
+    limit = {"1080p 及以下": 1080, "720p 及以下": 720, "360p 及以下": 360}.get(quality)
+    caps = [f"[height<={limit}]", f"[width<={limit}]"] if limit else [""]
+    return "/".join(video + cap + audio for video, audio in (
+        ("bv[protocol^=https][ext=mp4]", "+ba[protocol^=https][ext=m4a]"),
+        ("bv[ext=mp4]", "+ba[ext=m4a]"), ("bv", "+ba"),
+        ("b[ext=mp4]", ""), ("best", "")) for cap in caps)
 
 
 def build_format_sort(quality: str) -> list[str]:
@@ -681,6 +702,13 @@ def _is_fragment_rate_limit_error(exc: Exception) -> bool:
     )
 
 
+def generic_output_name(title: str, quality: str) -> str:
+    """Name by actual media height, not the user's requested upper bound."""
+    if quality == "仅音频 MP3":
+        return f"{title} [音频].%(ext)s"
+    return f"{title} %(height|未知)sp.%(ext)s"
+
+
 def _youtube_download_profiles(ydl_options: dict[str, Any]) -> list[tuple[int, int]]:
     """高速优先，403/429 后逐级减少请求数，并最终关闭 HTTP 分块。"""
     primary_concurrency = int(
@@ -793,9 +821,11 @@ def _download_with_adaptive_concurrency(
     """优先高速分片；遇到平台 403/429 时退到低请求的稳定传输。"""
     profiles = _youtube_download_profiles(ydl_options)
     acceleration_enabled = bool(ydl_options.get("external_downloader"))
+    direct_attempted = False
 
     for attempt_index, (concurrency, chunk_size) in enumerate(profiles):
         current_options = dict(ydl_options)
+        current_options["skip_unavailable_fragments"] = False
         current_options["concurrent_fragment_downloads"] = concurrency
         current_options["http_chunk_size"] = chunk_size
         try:
@@ -813,6 +843,7 @@ def _download_with_adaptive_concurrency(
                 native_options.pop("match_filter", None)
                 native_options["concurrent_fragment_downloads"] = STABLE_FRAGMENT_DOWNLOAD_CONCURRENCY
                 native_options["http_chunk_size"] = 0
+                native_options["skip_unavailable_fragments"] = False
                 progress_callback(
                     {
                         "status": "retrying",
@@ -822,7 +853,23 @@ def _download_with_adaptive_concurrency(
                     }
                 )
                 return _run_ytdlp_download(url, native_options, cancel_callback)
-            can_retry = attempt_index + 1 < len(profiles) and _is_fragment_rate_limit_error(exc)
+            timed_out = any(marker in str(exc).lower() for marker in ("timed out", "read timeout", "timeout error"))
+            detail = str(exc).lower()
+            interrupted = any(marker in detail for marker in ("unexpected_eof_while_reading", "eof occurred in violation of protocol"))
+            empty = "the downloaded file is empty" in detail
+            if interrupted and "proxy" not in ydl_options and not direct_attempted:
+                direct_attempted = True
+                progress_callback({"status": "retrying", "reason": "HTTPS 连接中断，正在尝试本任务直连；系统代理设置不变"})
+                direct_options = dict(current_options)
+                direct_options.update(proxy="", fragment_retries=1, retries=1)
+                try:
+                    return _run_ytdlp_download(url, direct_options, cancel_callback)
+                except DownloadStopped:
+                    raise
+                except Exception:
+                    # Continue the bounded profiles if direct access is unavailable.
+                    pass
+            can_retry = attempt_index + 1 < len(profiles) and (_is_fragment_rate_limit_error(exc) or timed_out or interrupted or empty)
             if not can_retry:
                 raise
             raise_if_cancelled(cancel_callback)
@@ -831,6 +878,12 @@ def _download_with_adaptive_concurrency(
                 reason = "平台仍拒绝分片请求，已切换稳定单连接继续下载"
             else:
                 reason = "平台限制高速分片，已自动降低并发并继续下载"
+            if timed_out:
+                reason = "分片传输超时，已降低并发并保留下载进度继续"
+            elif interrupted:
+                reason = "HTTPS 连接提前断开，正在降低并发重新连接（证书校验保持开启）"
+            elif empty:
+                reason = "本次未收到有效视频数据，正在降低并发重新请求；空文件不会标记成功"
             progress_callback(
                 {
                     "status": "retrying",
@@ -926,7 +979,6 @@ def _validated_media_files(files: list[Path], ffmpeg_dir: Path | None) -> list[P
             validate_media_file(file_path, ffmpeg_dir)
         except InvalidMediaError as exc:
             errors.append(str(exc))
-            file_path.unlink(missing_ok=True)
             continue
         validated.append(file_path)
     if not validated:
@@ -947,6 +999,7 @@ def download_url(
     """
     raise_if_cancelled(cancel_callback)
     platform = assert_supported_platform_url(url)
+    url = normalize_vimeo_download_url(url)
 
     from .douyin import download_douyin_url, is_douyin_url
     from .xiaohongshu import download_xiaohongshu_url, is_xiaohongshu_url
@@ -958,6 +1011,15 @@ def download_url(
 
     options.output_dir.mkdir(parents=True, exist_ok=True)
     before = _snapshot_files(options.output_dir)
+    completed_paths: set[Path] = set()
+
+    def track_progress(info: dict[str, Any]) -> None:
+        if info.get("status") == "finished" and info.get("filename"):
+            completed_paths.add(Path(info["filename"]).resolve())
+        data = info.get("info_dict") or {}
+        if info.get("status") == "finished" and data.get("filepath"):
+            completed_paths.add(Path(data["filepath"]).resolve())
+        progress_callback(info)
 
     auth_platform = _auth_platform_for_url(url)
     managed_cookie_file: Path | None = None
@@ -966,13 +1028,25 @@ def download_url(
             managed_cookie_file = export_auth_cookies_txt(auth_platform)
         ydl_options = build_ydl_options(
             options,
-            progress_callback,
+            track_progress,
             cancel_callback,
             auth_platform=auth_platform,
             managed_cookie_file=managed_cookie_file,
             download_platform=platform,
         )
+        if platform == "其他网站":
+            # A pasted page is one task, not permission to crawl an entire site.
+            ydl_options.update(noplaylist=True, playlistend=1, socket_timeout=20)
+            site = safe_path_name(urlparse(url).hostname, "其他网站").replace("%", "_")
+            folder = options.output_dir / site
+            if options.organize_by_creator:
+                folder /= "%(uploader|未知作者).80B"
+            ydl_options["outtmpl"] = str(folder / generic_output_name("%(title).100B [%(id).40B]", options.quality))
+            # Generic websites are anonymous, even with legacy browser-cookie settings.
+            ydl_options.pop("cookiefile", None)
+            ydl_options.pop("cookiesfrombrowser", None)
         _apply_single_media_download_options(url, ydl_options)
+        ydl_options["postprocessor_hooks"] = [track_progress]
         _apply_bilibili_page_download_options(url, ydl_options)
         for attempt in range(YOUTUBE_PUBLIC_REQUEST_ATTEMPTS):
             try:
@@ -996,26 +1070,39 @@ def download_url(
     except Exception as exc:
         if isinstance(exc, DownloadStopped):
             raise
-        youtube_unavailable_error = friendly_youtube_unavailable_error(exc)
-        if youtube_unavailable_error:
-            raise youtube_unavailable_error from exc
-        youtube_auth_error = friendly_youtube_auth_error(exc)
-        if youtube_auth_error:
-            raise youtube_auth_error from exc
-        friendly_error = _friendly_cookie_error(exc)
-        if friendly_error:
-            raise friendly_error from exc
-        raise
+        if "Requested format is not available" in str(exc):
+            raise RuntimeError(f"源站没有符合“{options.quality}”的可用画质（或未提供分辨率信息），未下载更高分辨率。可手动选择其他画质后重试。") from exc
+        if platform == "其他网站" and "Unsupported URL" in str(exc):
+            from .web_media import resolve_browser_media
+            progress_callback({"status": "resolving", "reason": "正在解析动态网页播放器"})
+            media_url, referer, page_title = resolve_browser_media(url, cancel_callback)
+            if page_title:
+                template = Path(ydl_options["outtmpl"])
+                title = safe_path_name(page_title).replace("%", "%%")[:120]
+                ydl_options["outtmpl"] = str(template.parent / generic_output_name(title, options.quality))
+            ydl_options["http_headers"] = {"Referer": referer}
+            result_code = _download_with_adaptive_concurrency(media_url, ydl_options, progress_callback, cancel_callback)
+        else:
+            friendly_error = (friendly_youtube_unavailable_error(exc)
+                              or friendly_youtube_auth_error(exc)
+                              or _friendly_cookie_error(exc))
+            if friendly_error:
+                raise friendly_error from exc
+            raise
     finally:
         release_auth_cookie_export(managed_cookie_file)
 
     after = _snapshot_files(options.output_dir)
-    changed = _changed_files(before, after)
+    changed = [p for p in _changed_files(before, after) if p.resolve() in completed_paths]
     if result_code not in (None, 0):
         raise RuntimeError(f"yt-dlp 返回失败状态：{result_code}")
     if not changed:
-        if any(is_probable_existing_media(path) for path in before):
-            return DownloadResult(files=[], skipped=True, message="保存目录中已存在对应文件，已跳过下载。")
+        existing = {path.resolve() for path in before}
+        matched = sorted(completed_paths & existing)
+        if matched:
+            for path in matched:
+                validate_media_file(path, options.ffmpeg_dir)
+            return DownloadResult(files=matched, skipped=True, message="当前任务对应文件已存在并通过媒体校验，已跳过。")
         raise RuntimeError("下载流程结束，但保存目录里没有新增文件。可能是链接解析失败、平台限制，或需要选择浏览器登录态。")
     validated = _validated_media_files(changed, options.ffmpeg_dir)
     return DownloadResult(files=_normalize_downloaded_files(validated))

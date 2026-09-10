@@ -10,7 +10,7 @@
 
 ## 下载安装
 
-当前可下载正式版为 [v2026.09.09](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.09-windows)。该 Windows 安装包由 GitHub Runner 上的 Inno Setup 7 x64 构建；云端构建、运行时检查与发布已通过，本地同源安装、启动和卸载验证另有记录。
+当前发布版本为 [v2026.09.10](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.10-windows)，使用 Inno Setup 7 构建。改进合集读取、真实画质命名和种子拖入；磁力链接及 BT 公网验收限制见[发布说明](docs/release-2026.09.10.md)。
 
 安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
 
@@ -24,6 +24,7 @@
 
 ## 当前功能
 
+- 源码新增通用网站音视频入口：其他网站作品页和音视频直链可直接入队，下载时自动解析；既有平台路径不变。范围、GitHub 技术选型与限制见 [通用下载说明](docs/generic-download.md)。尚未打包到上方正式版。
 - 智能识别抖音、YouTube、哔哩哔哩、小红书和 TikTok 的单视频及作者/频道/UP 主链接；支持包含短链的 Mac/移动端抖音分享文本，B站多 P 选集会展开为可勾选的独立队列项。
 - TikTok 支持单视频、分享文本和作者主页，使用独立软件内登录资料，列表只保留目标作者作品。
 - 小红书只把视频笔记加入队列，图文笔记不会伪装成视频；作者页被平台遮蔽时会明确提示软件内登录。

@@ -75,7 +75,8 @@ class InstallerContractTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         content = (root / "scripts" / "build_windows_installer.ps1").read_text(encoding="utf-8")
 
-        self.assertIn("installer\\work\\{0}-{1}", content)
+        self.assertIn("D:\\ReleaseUpload\\NanfengDownloader", content)
+        self.assertIn("work\\{0}-{1}", content)
         self.assertIn("Refusing to overwrite an existing release artifact", content)
         self.assertIn("Move-Item -LiteralPath $installer -Destination $releaseInstaller", content)
 

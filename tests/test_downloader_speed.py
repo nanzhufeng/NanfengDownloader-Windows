@@ -28,6 +28,24 @@ from app.downloader import (
 
 
 class DownloadSpeedOptionsTests(unittest.TestCase):
+    def test_empty_and_tls_eof_retry_with_bounded_lower_concurrency(self):
+        from yt_dlp.utils import DownloadError
+        for message in ["The downloaded file is empty", "[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol"]:
+            with self.subTest(message=message):
+                events = []
+                with patch('app.downloader._run_ytdlp_download', side_effect=[DownloadError(message), 0]) as run:
+                    self.assertEqual(_download_with_adaptive_concurrency('https://example.test/index.m3u8', {}, events.append, None), 0)
+                if 'SSL' in message:
+                    self.assertEqual(run.call_args_list[1].args[1]['proxy'], '')
+                else:
+                    self.assertLess(run.call_args_list[1].args[1]['concurrent_fragment_downloads'], run.call_args_list[0].args[1]['concurrent_fragment_downloads'])
+                self.assertTrue(events)
+                self.assertNotIn('nocheckcertificate', run.call_args_list[1].args[1])
+                with patch('app.downloader._run_ytdlp_download', side_effect=DownloadError(message)) as run:
+                    with self.assertRaises(DownloadError):
+                        _download_with_adaptive_concurrency('https://example.test/index.m3u8', {}, events.append, None)
+                self.assertEqual(run.call_count, len(_youtube_download_profiles({})) + (1 if 'SSL' in message else 0))
+
     def _options(self, temp_dir: str, quality: str = "720p 及以下") -> DownloadOptions:
         return DownloadOptions(
             output_dir=Path(temp_dir),
@@ -167,8 +185,8 @@ class DownloadSpeedOptionsTests(unittest.TestCase):
     def test_video_selector_prefers_separate_https_dash_streams(self) -> None:
         selector = build_format_selector("720p 及以下")
 
-        self.assertTrue(selector.startswith("bv[protocol^=https][ext=mp4]+ba[protocol^=https][ext=m4a]"))
-        self.assertNotIn("height<=720", selector)
+        self.assertTrue(selector.startswith("bv[protocol^=https][ext=mp4][height<=720]+ba[protocol^=https][ext=m4a]"))
+        self.assertIn("height<=720", selector)
 
     def test_portrait_resolution_uses_short_edge_limit(self) -> None:
         self.assertEqual(

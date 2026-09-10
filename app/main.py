@@ -72,11 +72,19 @@ from .windows_shell import reveal_file_in_explorer
 APP_NAME = "南枫下载"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
 SETTING_COMPLETION_SOUND = "notifications/completion_sound_enabled"
+SETTING_QUALITY_FALLBACK = "downloads/quality_fallback"
+
+def read_quality_fallback(settings):
+    try:
+        value = settings.value(SETTING_QUALITY_FALLBACK, "ask")
+    except (EOFError, ValueError, TypeError):
+        return "ask"
+    return value if isinstance(value, str) and value in {"ask", "original", "convert"} else "ask"
 SETTING_RESULT_SUMMARY = "notifications/result_summary_enabled"
 SETTING_AUTO_REVEAL_OUTPUT = "completion/auto_reveal_output_enabled"
 SETTING_CREATOR_SUBFOLDERS = "output/organize_by_creator_enabled"
 SETTING_QUEUE_STATE = "workspace/download_queue_state_v1"
-QUALITY_OPTIONS = ["最佳画质", "1080p 及以下", "720p 及以下", "360p 及以下", "仅音频 MP3"]
+QUALITY_OPTIONS = ["自动识别", "1080p 及以下", "720p 及以下", "360p 及以下", "仅音频 MP3"]
 COL_INDEX = 0
 COL_SELECT = 1
 COL_STATUS = 2
@@ -123,25 +131,12 @@ def play_download_completion_sound() -> bool:
 
 
 NETWORK_ERROR_KEYWORDS = (
-    "timed out",
-    "timeout",
-    "urlopen error",
-    "connection",
-    "connection reset",
-    "connection aborted",
-    "remote end closed",
-    "network",
-    "temporary failure",
-    "name resolution",
-    "getaddrinfo",
-    "winerror 100",
-    "winerror 110",
-    "errno 11001",
-    "read operation timed out",
-    "连接",
-    "超时",
-    "网络",
-    "远程主机",
+    "network is unreachable",
+    "network is down",
+    "winerror 10050",
+    "winerror 10051",
+    "网络不可达",
+    "网络不可用",
 )
 
 CERTIFICATE_ERROR_KEYWORDS = (
@@ -357,6 +352,7 @@ class AppSettingsDialog(QDialog):
         auto_reveal_output_enabled: bool,
         creator_subfolders_enabled: bool = False,
         parent: QWidget | None = None,
+        quality_fallback: str = "ask",
     ) -> None:
         super().__init__(parent)
         self.setObjectName("AppSettingsDialog")
@@ -401,15 +397,13 @@ class AppSettingsDialog(QDialog):
         self.creator_subfolders_checkbox.setChecked(creator_subfolders_enabled)
         self.creator_subfolders_checkbox.setToolTip("关闭时只按平台建文件夹；开启后，新下载文件再按频道或作者分目录。")
         options_layout.addWidget(self.creator_subfolders_checkbox)
+        options_layout.addWidget(QLabel("源站没有所选画质时"))
+        self.quality_fallback_combo = QComboBox()
+        for text, value in [("每批询问一次", "ask"), ("自动下载原画质", "original"), ("自动转为所选画质（耗时更长）", "convert")]:
+            self.quality_fallback_combo.addItem(text, value)
+        self.quality_fallback_combo.setCurrentIndex(max(0, self.quality_fallback_combo.findData(quality_fallback)))
+        options_layout.addWidget(self.quality_fallback_combo)
         layout.addWidget(options_panel)
-
-        review = QLabel(
-            "功能审阅：保留 Pornhub 公开单视频下载、重启恢复列表和可选作者目录；不新增常驻按键。"
-        )
-        review.setObjectName("AppSettingsHint")
-        review.setWordWrap(True)
-        review.setToolTip("会员、私密或 DRM 内容不纳入下载范围。")
-        layout.addWidget(review)
 
         buttons = QHBoxLayout()
         buttons.addStretch(1)
@@ -447,6 +441,7 @@ class QueueItem:
 
 
 class DownloadWorker(QObject):
+    quality_choice_requested = Signal(str)
     should_download_row = Signal(int)
     item_started = Signal(int)
     item_progress = Signal(int, dict)
@@ -463,6 +458,28 @@ class DownloadWorker(QObject):
         self._cancel_requested = False
         self._check_semaphore = QSemaphore(0)
         self._row_should_download = True
+        self._row_requested_quality = None
+        self._quality_semaphore = QSemaphore(0)
+        self._quality_choice = "cancel"
+        self._batch_quality_choice = None
+        self._batch_quality_target = None
+
+    def _choose_quality(self, quality):
+        if self._batch_quality_choice:
+            return self._batch_quality_choice
+        self._quality_choice = "cancel"
+        self.quality_choice_requested.emit(quality)
+        while not self._quality_semaphore.tryAcquire(1, 100):
+            if self.is_cancel_requested():
+                return "cancel"
+        if self._quality_choice in {"original", "convert"}:
+            self._batch_quality_choice = self._quality_choice
+            self._batch_quality_target = quality
+        return self._quality_choice
+
+    def receive_quality_choice(self, choice):
+        self._quality_choice = choice
+        self._quality_semaphore.release()
 
     @Slot()
     def run(self) -> None:
@@ -473,13 +490,25 @@ class DownloadWorker(QObject):
                 self.item_stopped.emit(item.row)
                 continue
             self.item_started.emit(item.row)
+            quality = self._row_requested_quality or item.quality
+            if self._batch_quality_choice == "original":
+                quality = "最佳画质"
+            elif self._batch_quality_choice == "convert":
+                quality = self._batch_quality_target
             try:
-                result = download_url(
+                from .quality_fallback import download_with_quality_choice, QualityChoiceCancelled
+                result = download_with_quality_choice(
                     item.url,
-                    replace(self.options, creator_name=item.creator_name, quality=item.quality),
+                    replace(self.options, creator_name=item.creator_name,
+                            quality=quality),
                     lambda info, row=item.row: self.item_progress.emit(row, info),
                     self.is_cancel_requested,
+                    self._choose_quality,
+                    download_url,
                 )
+            except QualityChoiceCancelled:
+                self.item_stopped.emit(item.row)
+                continue
             except DownloadStopped:
                 self.item_stopped.emit(item.row)
                 break
@@ -505,17 +534,19 @@ class DownloadWorker(QObject):
 
     def _ask_should_download(self, row: int) -> bool:
         self._row_should_download = False
+        self._row_requested_quality = None
         self.should_download_row.emit(row)
         self._check_semaphore.acquire()
         return self._row_should_download
 
-    @Slot(bool)
-    def receive_row_check(self, should_download: bool) -> None:
+    def receive_row_check(self, should_download: bool, quality: str | None = None) -> None:
         self._row_should_download = should_download
+        self._row_requested_quality = quality if quality in QUALITY_OPTIONS else None
         self._check_semaphore.release()
 
 
 class DiscoveryWorker(QObject):
+    collection_found = Signal(object)
     item_found = Signal(object)
     failed = Signal(str)
     all_done = Signal(int)
@@ -530,7 +561,12 @@ class DiscoveryWorker(QObject):
     def run(self) -> None:
         count = 0
         try:
-            for item in discover_links(self.text, self.options, max_items=self.max_items):
+            items = discover_links(self.text, self.options, max_items=self.max_items)
+            if len(items) > 1:
+                self.collection_found.emit(items)
+                self.all_done.emit(len(items))
+                return
+            for item in items:
                 self.item_found.emit(item)
                 count += 1
         except Exception as exc:
@@ -829,13 +865,18 @@ class MainWindow(QMainWindow):
         quality_label.setObjectName("FieldLabel")
         self.quality_combo = CenterComboBox()
         self.quality_combo.addItems(QUALITY_OPTIONS)
-        self.quality_combo.setCurrentText("720p 及以下")
+        self.quality_combo.setCurrentText("自动识别")
+        self.quality_combo.setToolTip("自动选择源站可用的最佳画质，不转码；文件名按下载后校验的实际分辨率生成。")
 
         url_label = QLabel("链接")
         url_label.setObjectName("FieldLabel")
-        self.url_text = QPlainTextEdit()
+        from .torrent_input import DownloadInput
+        self.url_text = DownloadInput()
+        self.url_text.setObjectName("DownloadInput")
+        self.url_text.viewport().setObjectName("DownloadInputViewport")
+        self.url_text.torrent_dropped.connect(self._import_dropped_torrent, Qt.QueuedConnection)
         self.url_text.setPlaceholderText(
-            "粘贴抖音、YouTube、哔哩哔哩、小红书、TikTok 或 Pornhub 链接；支持作者/频道/UP 主主页，可一次多行。"
+            "粘贴平台链接、其他网站作品页或音视频直链，可一次多行；原有平台支持作者/频道列表，其他网站下载时解析单条媒体。支持拖入种子文件（.torrent）。"
         )
         self.url_text.setFixedHeight(112)
 
@@ -1109,13 +1150,13 @@ class MainWindow(QMainWindow):
             }
             QPushButton#SettingsButton {
                 min-height: 30px;
-                background: #ffffff;
+                background: #eef0f3;
                 border: 1px solid #dbe3f0;
                 color: #566176;
                 font-weight: 700;
             }
             QPushButton#SettingsButton:hover {
-                background: #f8faff;
+                background: #e2e5ea;
                 border-color: #9fb3ff;
                 color: #3461ff;
             }
@@ -1256,6 +1297,13 @@ class MainWindow(QMainWindow):
             }
             QComboBox {
                 padding-right: 34px;
+            }
+            QPlainTextEdit#DownloadInput, QPlainTextEdit#DownloadInput:focus {
+                background: #fbfcff;
+            }
+            QWidget#DownloadInputViewport {
+                background: #fbfcff;
+                border: none;
             }
             QComboBox::drop-down {
                 subcontrol-origin: padding;
@@ -1499,9 +1547,13 @@ class MainWindow(QMainWindow):
             self.auto_reveal_output_enabled,
             self.creator_subfolders_enabled,
             self,
+            quality_fallback=read_quality_fallback(self.settings),
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
+        fallback = dialog.quality_fallback_combo.currentData()
+        if fallback in {"ask", "original", "convert"}:
+            self.settings.setValue(SETTING_QUALITY_FALLBACK, fallback)
         self._set_completion_preferences(
             completion_sound_enabled=dialog.completion_sound_enabled(),
             result_summary_enabled=dialog.result_summary_enabled(),
@@ -1596,6 +1648,14 @@ class MainWindow(QMainWindow):
     def _smart_import(self) -> None:
         self._start_discovery(fallback_to_queue=True)
 
+    @Slot(str)
+    def _import_dropped_torrent(self, path: str) -> None:
+        if self.worker_thread or self.discovery_thread:
+            QMessageBox.information(self, '暂不能导入', '请先停止当前下载或等待读取结束，再拖入种子。')
+            return
+        self.url_text.setPlainText(path)
+        self._start_discovery()
+
     def _clear_url_input(self) -> None:
         self.url_text.clear()
         self.url_text.setFocus()
@@ -1615,7 +1675,7 @@ class MainWindow(QMainWindow):
             select_item = self.table.item(row, COL_SELECT)
             status_item = self.table.item(row, COL_STATUS)
             quality_widget = self.table.cellWidget(row, COL_QUALITY)
-            quality = quality_widget.currentText() if isinstance(quality_widget, QComboBox) else self.quality_combo.currentText()
+            quality = self._row_quality(row)
             rows.append(
                 {
                     "url": link_item.text().strip(),
@@ -1662,12 +1722,14 @@ class MainWindow(QMainWindow):
                 if not isinstance(saved_row, dict):
                     continue
                 url = str(saved_row.get("url") or "").strip()
-                if not url or detect_platform(url) == "未知":
+                if not url or (detect_platform(url) == "未知" and not url.startswith('torrent:')):
                     continue
                 platform = str(saved_row.get("platform") or detect_platform(url))
                 creator = str(saved_row.get("creator") or "待解析")
                 title = str(saved_row.get("title") or "等待解析")
                 quality = str(saved_row.get("quality") or self.quality_combo.currentText())
+                if quality in {"最佳画质", "自动识别原画质"}:
+                    quality = "自动识别"
                 if not self._add_queue_row(url, platform, title, creator_name=creator):
                     continue
                 row = self.table.rowCount() - 1
@@ -1736,6 +1798,21 @@ class MainWindow(QMainWindow):
         if not load_more:
             self.discovery_limit = 500
         text = self.discovery_source_text if load_more and self.discovery_source_text else self.url_text.toPlainText().strip()
+        if not load_more and text.lower().rstrip('"').endswith('.torrent'):
+            try:
+                from .torrent import read_torrent, torrent_job, local_torrent_path
+                from .collection_dialog import CollectionDialog
+                torrent_path = local_torrent_path(text)
+                raw, files = read_torrent(torrent_path)
+                entries = [CatalogItem('BT', f'{rel}  ({size / 1024**2:.1f} MB)', str(index)) for index, rel, size in files]
+                dialog = CollectionDialog(entries, self)
+                dialog.setWindowTitle('选择种子文件（下载时参与节点交换，完成即停止做种）')
+                if dialog.exec() == QDialog.Accepted and dialog.selected():
+                    indices = [int(item.url) for item in dialog.selected()]
+                    self._on_catalog_item_found(CatalogItem('BT', f'{torrent_path.stem}（{len(indices)}个文件）', torrent_job(torrent_path, indices, raw), creator_name='BT种子'))
+            except Exception as exc:
+                QMessageBox.warning(self, '种子读取失败', str(exc))
+            return
         if not split_urls(text):
             QMessageBox.information(
                 self,
@@ -1756,6 +1833,7 @@ class MainWindow(QMainWindow):
         self.discovery_worker.moveToThread(self.discovery_thread)
         self.discovery_thread.started.connect(self.discovery_worker.run)
         self.discovery_worker.item_found.connect(self._on_catalog_item_found)
+        self.discovery_worker.collection_found.connect(self._choose_collection_items)
         self.discovery_worker.failed.connect(self._on_discovery_failed)
         self.discovery_worker.all_done.connect(self._on_discovery_done)
         self.discovery_worker.all_done.connect(self.discovery_thread.quit)
@@ -1816,6 +1894,14 @@ class MainWindow(QMainWindow):
             creator_name=item.creator_name,
         ):
             self._update_status()
+
+    @Slot(object)
+    def _choose_collection_items(self, items) -> None:
+        from .collection_dialog import CollectionDialog
+        dialog = CollectionDialog(items, self)
+        if dialog.exec() == QDialog.Accepted:
+            for item in dialog.selected():
+                self._on_catalog_item_found(item)
 
     @Slot(str)
     def _on_discovery_failed(self, error: str) -> None:
@@ -1992,6 +2078,10 @@ class MainWindow(QMainWindow):
     def _set_quality_cell(self, row: int, quality: str) -> None:
         combo = CenterComboBox()
         combo.addItems(QUALITY_OPTIONS)
+        for index, option in enumerate(QUALITY_OPTIONS):
+            combo.setItemData(index, option)
+        if quality in {"最佳画质", "自动识别原画质"}:
+            quality = "自动识别"
         combo.setCurrentText(quality if quality in QUALITY_OPTIONS else self.quality_combo.currentText())
         combo.setObjectName("TableCombo")
         combo.currentTextChanged.connect(self._schedule_queue_persist)
@@ -2097,18 +2187,8 @@ class MainWindow(QMainWindow):
         ]
 
     def _fast_skip_existing_rows(self, rows: list[int], output_dir: Path) -> int:
-        existing = self._existing_media_index(output_dir)
-        if not existing:
-            return 0
-
-        skipped = 0
-        for row in rows:
-            existing_path = self._row_existing_file(row, existing)
-            if not existing_path:
-                continue
-            self._on_item_skipped(row, "保存目录中已存在对应文件，已跳过下载。", [existing_path])
-            skipped += 1
-        return skipped
+        # Only the downloader knows the selected format and exact target identity.
+        return 0
 
     def _platform_storage_key(self, platform: str | None) -> str:
         normalized = (platform or "").strip().casefold()
@@ -2240,6 +2320,7 @@ class MainWindow(QMainWindow):
         self.worker.item_finished.connect(self._on_item_finished)
         self.worker.item_skipped.connect(self._on_item_skipped)
         self.worker.item_failed.connect(self._on_item_failed)
+        self.worker.quality_choice_requested.connect(self._answer_quality_choice)
         self.worker.item_stopped.connect(self._on_item_stopped)
         self.worker.all_done.connect(self._on_all_done)
         self.worker.all_done.connect(self.worker_thread.quit)
@@ -2268,7 +2349,9 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _answer_should_download_row(self, row: int) -> None:
         if self.worker:
-            self.worker.receive_row_check(self._row_is_selected_for_download(row))
+            self.worker.receive_row_check(
+                self._row_is_selected_for_download(row), self._row_quality(row)
+            )
 
     def _row_creator_name(self, row: int) -> str | None:
         item = self.table.item(row, COL_CREATOR)
@@ -2282,7 +2365,8 @@ class MainWindow(QMainWindow):
     def _row_quality(self, row: int) -> str:
         widget = self.table.cellWidget(row, COL_QUALITY)
         if isinstance(widget, QComboBox):
-            return widget.currentText()
+            text = widget.currentText()
+            return text if text in QUALITY_OPTIONS else (widget.currentData() or text)
         item = self.table.item(row, COL_QUALITY)
         if item and item.text().strip():
             return item.text().strip()
@@ -2309,6 +2393,12 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         """窗口关闭前同步队列，避免定时写入尚未来得及触发时丢失最后一项。"""
         self._persist_queue_state()
+        if getattr(self, 'worker_thread', None) and self.worker_thread.isRunning():
+            if self.worker:
+                self.worker.cancel()
+            event.ignore()
+            self.status_label.setText("正在停止后台任务，请稍候再关闭窗口。")
+            return
         super().closeEvent(event)
 
     def _select_all_rows(self) -> None:
@@ -2334,6 +2424,15 @@ class MainWindow(QMainWindow):
     @Slot(int, dict)
     def _on_item_progress(self, row: int, info: dict[str, Any]) -> None:
         status = info.get("status")
+        media = info.get("info_dict") or {}
+        height = media.get("height")
+        if isinstance(height, (int, float)) and height > 0:
+            widget = self.table.cellWidget(row, COL_QUALITY)
+            if isinstance(widget, QComboBox):
+                requested = self._row_quality(row)
+                previous = widget.blockSignals(True)
+                widget.setToolTip(f"实际下载：{int(height)}p；原选择：{requested}")
+                widget.blockSignals(previous)
         if info.get("filename"):
             self._set_cell(row, COL_TITLE, Path(str(info["filename"])).name)
 
@@ -2351,10 +2450,31 @@ class MainWindow(QMainWindow):
                 self._set_cell(row, COL_PROGRESS, "0%")
             self._set_cell(row, COL_SPEED, info.get("_speed_str", "-").strip())
             self._set_cell(row, COL_ETA, info.get("_eta_str", "-").strip())
+        elif status == "converting":
+            self._set_row_status(row, "处理中")
+            self._set_cell(row, COL_PROGRESS, "转码中")
+            self._set_cell(row, COL_SPEED, "本地转码")
+            self._set_cell(row, COL_ETA, "估算中")
+            self.status_label.setText(str(info.get("reason") or "正在转换画质"))
+        elif status == "bt_waiting":
+            self._set_row_status(row, "下载中")
+            self._set_cell(row, COL_PROGRESS, "等待数据")
+            self._set_cell(row, COL_SPEED, f"{info.get('connections', 0)} 个连接")
+            self._set_cell(row, COL_ETA, "暂无估算")
+            self.status_label.setText(str(info.get('reason', '正在寻找可用节点')))
+        elif status == "resolving":
+            self._set_row_status(row, "下载中")
+            self._set_cell(row, COL_PROGRESS, "解析中")
+            self._set_cell(row, COL_SPEED, "-")
+            self._set_cell(row, COL_ETA, "等待视频源")
+            self.status_label.setText(str(info.get("reason") or "正在解析视频地址"))
         elif status == "retrying":
             reason = str(info.get("reason") or "正在重新建立下载连接。")
-            self._set_row_status(row, "续传中")
-            self._set_cell(row, COL_SPEED, "正在续传")
+            self._set_row_status(row, "下载中")
+            current_progress = self.table.item(row, COL_PROGRESS)
+            if not current_progress or current_progress.text() in {"0%", "-", "解析中"}:
+                self._set_cell(row, COL_PROGRESS, "重连中")
+            self._set_cell(row, COL_SPEED, "-")
             self._set_cell(row, COL_ETA, "重新连接")
             self.status_label.setText(reason)
         elif status == "finished":
@@ -2382,11 +2502,39 @@ class MainWindow(QMainWindow):
         self._set_row_output_files(row, files)
         self._update_main_progress()
 
+    @Slot(str)
+    def _answer_quality_choice(self, quality: str) -> None:
+        worker = self.worker
+        if not worker:
+            return
+        saved = read_quality_fallback(self.settings)
+        if saved in {"original", "convert"}:
+            worker.receive_quality_choice(saved)
+            return
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("源站没有所选画质")
+        dialog.setText(f"没有符合“{quality}”的源。所选方式将统一应用于当前及本批后续视频。")
+        dialog.setInformativeText("本批不再重复询问，下批恢复用户设置。转码需要先下载原视频，再重新编码，可能比下载更久；原文件会保留。取消仅跳过本项。")
+        original = dialog.addButton("下载原画质", QMessageBox.AcceptRole)
+        convert = dialog.addButton("转为所选画质（耗时更长）", QMessageBox.ActionRole)
+        cancel = dialog.addButton("取消本项", QMessageBox.RejectRole)
+        dialog.setDefaultButton(cancel)
+        dialog.setEscapeButton(cancel)
+        remember = QCheckBox("记住此选择，下次不再询问（可在设置中修改）", dialog)
+        dialog.setCheckBox(remember)
+        dialog.exec()
+        choice = "original" if dialog.clickedButton() is original else "convert" if dialog.clickedButton() is convert else "cancel"
+        if remember.isChecked() and choice in {"original", "convert"}:
+            self.settings.setValue(SETTING_QUALITY_FALLBACK, choice)
+            self.settings.sync()
+        worker.receive_quality_choice(choice)
+
     @Slot(int, str)
     def _on_item_failed(self, row: int, error: str) -> None:
         if is_network_error_text(error):
             self._set_row_status(row, "等待联网")
-            self._set_cell(row, COL_TITLE, "网络中断，恢复联网后自动重试")
+            self._set_cell(row, COL_TITLE, error[:180])
+            self.latest_failure_detail = error
             self._set_cell(row, COL_SPEED, "-")
             self._set_cell(row, COL_ETA, "-")
             select_item = self.table.item(row, COL_SELECT)

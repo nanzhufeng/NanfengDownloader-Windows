@@ -102,7 +102,7 @@ def _select_stream(note: dict[str, Any], quality: str) -> dict[str, Any] | None:
     matching = [item for item in candidates if 0 < _stream_short_edge(item) <= limit]
     if matching:
         return max(matching, key=_stream_short_edge)
-    return min(candidates, key=_stream_short_edge)
+    raise RuntimeError(f"源站没有符合“{quality}”的可用画质，未自动下载更高分辨率。")
 
 
 def parse_xiaohongshu_note(

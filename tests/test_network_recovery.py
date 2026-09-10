@@ -52,6 +52,22 @@ class NetworkRecoveryTests(unittest.TestCase):
         self.assertFalse(is_network_error_text("SSL: CERTIFICATE_VERIFY_FAILED"))
         self.assertFalse(is_network_error_text("<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED]>"))
 
+    def test_site_transport_failures_do_not_claim_machine_is_offline(self):
+        for message in ['read operation timed out', 'Connection reset by peer',
+                        'urlopen error [SSL: UNEXPECTED_EOF_WHILE_READING]',
+                        'getaddrinfo failed', '视频源连接超时', 'The downloaded file is empty']:
+            with self.subTest(message=message):
+                self.assertFalse(is_network_error_text(message))
+        self.assertTrue(is_network_error_text('[WinError 10051] Network is unreachable'))
+
+    def test_site_timeout_does_not_pause_batch(self):
+        self.window.waiting_for_network = False
+        with patch.object(self.window, '_start_network_wait') as wait:
+            self.window._on_item_failed(0, '视频源连接超时')
+        wait.assert_not_called()
+        self.assertFalse(self.window.waiting_for_network)
+        self.assertEqual(self.window.table.item(0, COL_STATUS).text(), '失败')
+
     def test_retrying_download_is_visible_and_keeps_current_progress(self) -> None:
         self.window._set_row_status(0, "下载中")
         self.window._set_cell(0, COL_PROGRESS, "62%")
@@ -63,8 +79,8 @@ class NetworkRecoveryTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(self.window.table.item(0, COL_STATUS).text(), "续传中")
-        self.assertEqual(self.window.table.item(0, COL_SPEED).text(), "正在续传")
+        self.assertEqual(self.window.table.item(0, COL_STATUS).text(), "下载中")
+        self.assertEqual(self.window.table.item(0, COL_SPEED).text(), "-")
         self.assertEqual(self.window.table.item(0, COL_ETA).text(), "重新连接")
         self.assertEqual(self.window.table.item(0, COL_PROGRESS).text(), "62%")
         self.assertIn("断点续传", self.window.status_label.text())

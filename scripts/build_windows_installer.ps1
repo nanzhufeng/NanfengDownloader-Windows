@@ -32,7 +32,7 @@ try {
         throw "Release version is invalid."
     }
 
-    $releaseDirectory = Join-Path $projectRoot "installer\releases"
+    $releaseDirectory = 'D:\ReleaseUpload\NanfengDownloader'
     $releaseInstaller = Join-Path $releaseDirectory $metadata.installer_name
     if (Test-Path -LiteralPath $releaseInstaller) {
         throw "Refusing to overwrite an existing release artifact: $releaseInstaller"
@@ -57,7 +57,7 @@ try {
         throw "PyInstaller build failed."
     }
 
-    $buildOutputDirectory = Join-Path $projectRoot ("installer\work\{0}-{1}" -f $metadata.output_version, [guid]::NewGuid().ToString("N"))
+    $buildOutputDirectory = Join-Path $releaseDirectory ("work\{0}-{1}" -f $metadata.output_version, [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $buildOutputDirectory -Force | Out-Null
     & $iscc "/DMyAppVersion=$($metadata.app_version)" "/DMyVersionInfo=$($metadata.version_info)" "/DMyOutputVersion=$($metadata.output_version)" "/DMyAppOutputDir=$buildOutputDirectory" "packaging\windows\NanfengDownloader.iss"
     if ($LASTEXITCODE -ne 0) {
