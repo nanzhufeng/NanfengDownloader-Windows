@@ -4,9 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QApplication, QDialog, QLabel
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton
 
-from app.main import AppSettingsDialog, DownloadSummaryDialog, MainWindow
+from app.main import APP_DEVELOPED_AT, APP_GITHUB_REPOSITORY, APP_VERSION, AboutDialog, AppSettingsDialog, DownloadSummaryDialog, MainWindow
 
 
 class DownloadSummaryDialogTests(unittest.TestCase):
@@ -81,6 +81,21 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertFalse(dialog.result_summary_enabled())
         self.assertTrue(dialog.auto_reveal_output_enabled())
         self.assertTrue(dialog.creator_subfolders_enabled())
+
+    def test_settings_exposes_about_dialog_with_current_release_facts(self) -> None:
+        settings = AppSettingsDialog(False, True, False)
+        about_button = settings.findChild(QPushButton, "OpenAboutButton")
+        self.assertIsNotNone(about_button)
+        self.assertEqual(about_button.text(), "关于南枫下载")
+
+        about = AboutDialog(settings)
+        labels = [label.text() for label in about.findChildren(QLabel)]
+        self.assertIn("关于", labels)
+        self.assertIn("南枫下载", labels)
+        self.assertIn(f"Desktop 版 {APP_VERSION}", labels)
+        self.assertIn(f"开发时间  {APP_DEVELOPED_AT}", labels)
+        self.assertIn(f"源码与更新：GitHub · {APP_GITHUB_REPOSITORY}", labels)
+        self.assertEqual(about.github_button.objectName(), "AboutGitHubButton")
 
     def test_completion_sound_preference_persists_in_the_app_settings_store(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

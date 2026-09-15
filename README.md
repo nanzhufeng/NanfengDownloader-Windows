@@ -10,9 +10,9 @@
 
 ## 下载安装
 
-当前发布版本为 [v2026.09.10.1](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.10.1-windows)，使用 Inno Setup 7 构建。修复 QtCore DLL 启动报错，升级时检测运行中的程序并提示关闭；磁力链接及 BT 公网验收限制见[发布说明](docs/release-2026.09.10.1.md)。
+当前发布版本为 [v2026.09.15](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.15-windows)，使用 Inno Setup 7 构建。设置中新增“关于南枫下载”，展示实际版本、开发时间、开发者信息和 GitHub 仓库入口；磁力链接及 BT 公网验收限制见[发布说明](docs/release-2026.09.15.md)。
 
-安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址和校验值后安装。
+安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 
 ## 能力边界
 
@@ -103,4 +103,4 @@ powershell -ExecutionPolicy Bypass -File scripts\build_windows_installer.ps1 -Ve
 
 构建必须显式指定一个新的 `YYYY.MM.DD` 版本；安装器名称和 GitHub 标签由同一版本元数据生成，已存在的 Release 标签会被拒绝而不是覆盖。构建先写入隔离工作目录，只有安装包完整生成后才进入 `installer/releases`，中断产物不会伪装为正式 Release。安装范围为当前 Windows 用户，卸载不会删除下载目录或软件专用登录资料；更新前请自行关闭正在下载的南枫下载，安装器不会强制结束下载任务。
 
-打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖、安装包和 SHA-256。
+打包前应确认 FFmpeg、Node.js 和 YouTube PO Provider 被正确发现；最终还需验证 EXE 启动、产品名、品牌图标、依赖和安装包。
