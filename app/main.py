@@ -14,7 +14,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QRect, QSize, QSettings, Qt, QThread, QTimer, Signal, Slot, QSemaphore
+from PySide6.QtCore import QEvent, QObject, QRect, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -70,6 +70,10 @@ from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
+APP_VERSION = "v2026.09.15"
+APP_DEVELOPED_AT = "2026-09-15 23:06"
+APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
+APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
 SETTING_COMPLETION_SOUND = "notifications/completion_sound_enabled"
 SETTING_QUALITY_FALLBACK = "downloads/quality_fallback"
@@ -342,6 +346,82 @@ class DownloadSummaryDialog(QDialog):
         return card, count_label
 
 
+class AboutDialog(QDialog):
+    """设置中的产品与发布信息，使用当前正式 Windows Release 的固定事实。"""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("AboutDialog")
+        self.setWindowTitle("关于")
+        self.setModal(True)
+        self.setMinimumWidth(620)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 24, 30, 24)
+        layout.setSpacing(18)
+
+        title = QLabel("关于")
+        title.setObjectName("AboutTitle")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+
+        card = QFrame()
+        card.setObjectName("AboutCard")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(28, 24, 28, 22)
+        card_layout.setSpacing(8)
+
+        product_name = QLabel(APP_NAME)
+        product_name.setObjectName("AboutProductName")
+        card_layout.addWidget(product_name)
+        product_description = QLabel("面向个人工作流的 Windows 批量视频下载工具。")
+        product_description.setObjectName("AboutProductDescription")
+        card_layout.addWidget(product_description)
+        card_layout.addSpacing(14)
+
+        divider = QFrame()
+        divider.setObjectName("AboutDivider")
+        divider.setFrameShape(QFrame.HLine)
+        card_layout.addWidget(divider)
+        card_layout.addSpacing(12)
+
+        version_title = QLabel("版本信息")
+        version_title.setObjectName("AboutSectionTitle")
+        card_layout.addWidget(version_title)
+        version = QLabel(f"Desktop 版 {APP_VERSION}")
+        version.setObjectName("AboutDetail")
+        card_layout.addWidget(version)
+        developed_at = QLabel(f"开发时间  {APP_DEVELOPED_AT}")
+        developed_at.setObjectName("AboutDetail")
+        card_layout.addWidget(developed_at)
+        card_layout.addSpacing(12)
+
+        developer_title = QLabel("开发者信息")
+        developer_title.setObjectName("AboutSectionTitle")
+        card_layout.addWidget(developer_title)
+        for text in (
+            "开发者：席瑞",
+            "联系邮箱：nanzhufeng.studio@gmail.com",
+            f"源码与更新：GitHub · {APP_GITHUB_REPOSITORY}",
+            "版权所有 © 2026 席瑞",
+        ):
+            detail = QLabel(text)
+            detail.setObjectName("AboutDetail")
+            detail.setWordWrap(True)
+            card_layout.addWidget(detail)
+
+        self.github_button = QPushButton("打开 GitHub")
+        self.github_button.setObjectName("AboutGitHubButton")
+        self.github_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(APP_GITHUB_URL)))
+        card_layout.addWidget(self.github_button, alignment=Qt.AlignLeft)
+        layout.addWidget(card)
+
+        close_button = QPushButton("关闭")
+        close_button.setObjectName("AboutCloseButton")
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button, alignment=Qt.AlignRight)
+
+
 class AppSettingsDialog(QDialog):
     """只放用户明确需要的下载偏好，避免把主工作台变成设置页。"""
 
@@ -405,6 +485,11 @@ class AppSettingsDialog(QDialog):
         options_layout.addWidget(self.quality_fallback_combo)
         layout.addWidget(options_panel)
 
+        self.about_button = QPushButton("关于南枫下载")
+        self.about_button.setObjectName("OpenAboutButton")
+        self.about_button.clicked.connect(self._open_about)
+        layout.addWidget(self.about_button, alignment=Qt.AlignLeft)
+
         buttons = QHBoxLayout()
         buttons.addStretch(1)
         cancel_button = QPushButton("取消")
@@ -429,6 +514,9 @@ class AppSettingsDialog(QDialog):
 
     def creator_subfolders_enabled(self) -> bool:
         return self.creator_subfolders_checkbox.isChecked()
+
+    def _open_about(self) -> None:
+        AboutDialog(self).exec()
 
 
 @dataclass
@@ -1166,6 +1254,9 @@ class MainWindow(QMainWindow):
             QDialog#AppSettingsDialog {
                 background: #ffffff;
             }
+            QDialog#AboutDialog {
+                background: #f8fafc;
+            }
             QLabel#AppSettingsTitle {
                 color: #111827;
                 font-size: 16px;
@@ -1179,6 +1270,55 @@ class MainWindow(QMainWindow):
                 background: #f7fbfc;
                 border: 1px solid #cde0e6;
                 border-radius: 8px;
+            }
+            QLabel#AboutTitle {
+                color: #111827;
+                font-size: 22px;
+                font-weight: 800;
+            }
+            QFrame#AboutCard {
+                background: #ffffff;
+                border: 1px solid #e5eaf3;
+                border-radius: 14px;
+            }
+            QFrame#AboutDivider {
+                color: #e5e7eb;
+            }
+            QLabel#AboutProductName,
+            QLabel#AboutSectionTitle {
+                color: #1f2937;
+                font-weight: 800;
+            }
+            QLabel#AboutProductName {
+                font-size: 17px;
+            }
+            QLabel#AboutSectionTitle {
+                font-size: 15px;
+            }
+            QLabel#AboutProductDescription {
+                color: #7b8496;
+                font-size: 12px;
+            }
+            QLabel#AboutDetail {
+                color: #374151;
+                font-size: 13px;
+            }
+            QPushButton#OpenAboutButton,
+            QPushButton#AboutGitHubButton,
+            QPushButton#AboutCloseButton {
+                min-height: 28px;
+                padding: 0 12px;
+                background: #ffffff;
+                border: 1px solid #dbe3f0;
+                border-radius: 6px;
+                color: #3461ff;
+                font-weight: 700;
+            }
+            QPushButton#OpenAboutButton:hover,
+            QPushButton#AboutGitHubButton:hover,
+            QPushButton#AboutCloseButton:hover {
+                background: #eef3ff;
+                border-color: #9fb3ff;
             }
             QCheckBox#CompletionSoundCheckBox,
             QCheckBox#ResultSummaryCheckBox,

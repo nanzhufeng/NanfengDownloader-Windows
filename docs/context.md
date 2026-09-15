@@ -53,6 +53,8 @@ NanfengDownloader-Windows/
 
 ## 已验证基线
 
+- 当前源码版本：`v2026.09.15`。设置新增“关于南枫下载”入口，展示正式 Windows Release 的版本、开发时间与仓库信息；需在本次构建与 Release 后更新最终交付记录。
+
 - 2026-09-10 本地启动修复：`2026.09.10.1` 已构建并覆盖安装验证，解决宿主 Poppler ICU 被错误打包造成的 QtCore 导入失败；176 项测试通过，未上传 GitHub。证据见 [启动修复记录](verification/qtcore-startup-20260910.md)。下列远端发布信息属于原有记录。
 
 - 当前 Windows Release：`v2026.09.09-windows`，资产及 SHA-256 见 [README](../README.md)。
