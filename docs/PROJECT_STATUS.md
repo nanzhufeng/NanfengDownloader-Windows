@@ -1,11 +1,11 @@
 # 南枫下载 Windows 项目状态
 
 ## Verified
-- Last verified: 2026-10-12 13:47 +08:00
+- Last verified: 2026-10-12 14:29 +08:00
 - Branch: main
-- Code baseline: 1e36a7771357836f1ebfe68155804c12f79a2611 + 本轮工作区修改；提交后的最终基线以 Git 为准。
+- Code baseline: c90908f680e79fb9e813025364e8ba4c113162d4（安装包代码基线）；发布资料随后收尾，最终版本基线以 v2026.10.12-windows 标签为准。
 - Verified by: Codex
-- Status: Blocked
+- Status: Active
 - Scope: Windows v2026.10.12 源码、原生控件、冻结 EXE、Inno Setup 安装器与隔离安装验收。
 
 ## Current
@@ -15,11 +15,10 @@
 - 当前源码 BAT：仓库根目录 `启动南枫下载.bat`。
 
 ## In Progress
-- v2026.10.12 源码同步 GitHub；安装包准备发布。
+- 本轮代码、安装器验收和远端下载回验已完成。公开状态以 [GitHub Release](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.12-windows) 的实时结果为准。
 
 ## Blocked
-- 未发现正式 Windows 代码签名证书：环境变量、用户级配置入口与 Windows 证书库均未发现可用凭据；终态安装包验签为 NotSigned。
-- 用户本轮 AGENTS 要求默认交付正式签名软件。只有正式凭据可用，或用户明确允许沿用历史未签名发布方式，才能完成对外安装包发布。
+- 无。用户于 2026-10-12 将 Windows 默认发布方式改为未签名安装包；Android、macOS 规则不受此变更影响。
 
 ## Tests
 | 验证层 | 结果 | 范围 / 证据 |
@@ -29,20 +28,20 @@
 | Build | PASS | PyInstaller 终态 EXE；Inno Setup 7 x64 安装包 |
 | Installer | PASS | 独立目录安装、真实窗口标题及响应、aria2/FFmpeg/Node、卸载退出 0；原快捷方式保留 |
 | Signature | NOT SIGNED | Get-AuthenticodeSignature；安装包 157112270 字节 |
-| Remote asset | NOT RUN | 签名门禁尚未解除；未创建新 Release、标签或资产 |
+| Remote asset | PASS | 唯一 Setup EXE；uploaded；157112270 字节；从 GitHub 下载与本地文件一致 |
 
 ## Gaps
 - 本轮未重新验收外部平台真实下载；磁力链接和 BT 公网下载仍未完成真实验收。
-- 当前正式签名身份缺失。
+- Windows 安装包验签为 NotSigned，按用户的新默认规则发布；不声明正式签名。
 
 ## Sync & Safety
-- Observed at: 2026-10-12 13:47 +08:00
+- Observed at: 2026-10-12 14:29 +08:00
 - Docs: OK（README 当前截图、版本说明、状态摘要）
-- Git: DIRTY（本轮待提交修改；最终提交和推送状态见 Git）
-- Remote: LOCAL ONLY（提交前观测；origin/main 为 1e36a7771357836f1ebfe68155804c12f79a2611）
+- Git: DIRTY（仅本次发布资料收尾；功能代码已提交，最终同步结果以版本标签为准）
+- Remote: PUSHED（代码基线 c90908f 已推送 main；本次文档收尾将随 v2026.10.12-windows 标签同步）
 - Rollback point: 1e36a7771357836f1ebfe68155804c12f79a2611（此前已发布的 v2026.09.15-windows）
 - Secrets/config risk: NONE（app/scripts/packaging/docs/tests 的典型真实凭据模式未命中；预览已脱敏；设计会话目录不提交）
 
 ## Next
-1. 确认正式签名可用或用户允许本版未签名发布。
-2. 上传唯一 Setup EXE，下载回验，核对 main 与发布标签一致后发布。
+1. 从 GitHub Release 下载本版使用；当前源码入口为根目录 BAT。
+2. 后续按单独授权进行外部平台真实下载及 BT 公网验收。

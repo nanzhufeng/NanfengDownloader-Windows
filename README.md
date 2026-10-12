@@ -14,9 +14,9 @@
 
 ## 下载安装
 
-最近已发布版本为 [v2026.09.15](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.15-windows)，使用 Inno Setup 7 构建。v2026.10.12 安装包正在准备，发布与签名进度见 [项目状态](docs/PROJECT_STATUS.md)，更新内容见[版本说明](docs/release-2026.10.12.md)。
+Windows 安装包：[v2026.10.12](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.12-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.12.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
 
-安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
+Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 
 ## 能力边界
 
