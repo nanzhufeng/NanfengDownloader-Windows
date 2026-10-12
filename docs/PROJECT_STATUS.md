@@ -1,9 +1,9 @@
 # 南枫下载 Windows 项目状态
 
 ## Verified
-- Last verified: 2026-10-12 19:04 +08:00
+- Last verified: 2026-10-12 19:18 +08:00
 - Branch: main
-- Code baseline: 当前源码准备发布为 v2026.10.12.1-windows；冻结产物与版本信息已一致，最终提交以该标签为准。
+- Code baseline: 09a36af49c6d2de09a84c2dca16ff5bcc05fb233；v2026.10.12.1-windows 标签与冻结源码一致，后续仅发布资料收尾。
 - Verified by: Codex
 - Status: Active
 - Scope: Windows v2026.10.12.1 源码、204 项测试、冻结 EXE、Inno Setup 7 安装包；本版安装／卸载未执行。
@@ -22,7 +22,7 @@
 - 当前源码 BAT：仓库根目录 `启动南枫下载.bat`。
 
 ## In Progress
-- v2026.10.12.1 已完成本地构建与冻结启动验收，准备提交 main、上传正式 Release。
+- 无进行中的发布动作；v2026.10.12.1 已正式公开，唯一 Setup EXE 已完成远端下载回验。
 
 ## Blocked
 - 安装／卸载验收命令被自动批准审查拒绝，仅返回 blocked by policy；未执行该命令。发布继续按已完成验证如实标明边界。
@@ -37,21 +37,22 @@
 | 当前 Build／启动 | PASS | PyInstaller EXE 与 Inno Setup 7 x64；隔离配置、冻结窗口响应、随包工具通过 |
 | 当前 Installer | NOT RUN | 验收命令被自动审查拒绝；上版安装证据不代表本版已安装 |
 | 当前 Signature | NOT SIGNED | Get-AuthenticodeSignature；安装包 157127469 字节 |
-| 当前 Remote asset | PENDING | 待上传并从 GitHub 下载回验 |
+| 当前 Remote asset | PASS | 正式 Release；唯一 Setup EXE、uploaded、157127469 字节；重新下载与冻结本地文件一致 |
 
 ## Gaps
 - 本轮未重新验收外部平台真实下载；磁力链接和 BT 公网下载仍未完成真实验收。
 - 性能证据覆盖本地入表和所给公开抖音单作品；B站、小红书、TikTok 本轮是实现检查和自动回归，不冒称完成全平台公网性能验收。物理多 DPI／高对比与读屏仍待目标环境验证。
 - Windows 安装包验签为 NotSigned，按用户的新默认规则发布；不声明正式签名。
+- 中断编译的 110653444 字节临时残留回收也被自动审查拒绝，位置与证据见本版交付验收文档。
 
 ## Sync & Safety
-- Observed at: 2026-10-12 19:04 +08:00
+- Observed at: 2026-10-12 19:18 +08:00
 - Docs: 当前合同已统一；README 三张图已更新为本版冻结 EXE 实际界面。
-- Git: 本轮修改准备提交 main；GitHub 发布状态以终态验收更新为准。
-- Remote: 待发布 v2026.10.12.1。
+- Git: 源码已提交 main；当前只收尾本版发布记录。
+- Remote: v2026.10.12.1 正式 Release 已发布；main 已同步源码与真实预览。
 - Rollback point: 1e36a7771357836f1ebfe68155804c12f79a2611（此前已发布的 v2026.09.15-windows）
 - Secrets/config risk: NONE（app/scripts/packaging/docs/tests 的典型真实凭据模式未命中；预览已脱敏；设计会话目录不提交）
 
 ## Next
-1. 完成 v2026.10.12.1 的 main 提交、正式 Release 和远端下载回验。
+1. 从 GitHub 下载 v2026.10.12.1；当前源码仍可用根目录 BAT 启动。
 2. 后续按单独授权进行外部平台真实下载及 BT 公网验收。
