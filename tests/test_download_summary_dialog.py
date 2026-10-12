@@ -3,7 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QSettings, Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton
 
 from app.main import APP_DEVELOPED_AT, APP_GITHUB_REPOSITORY, APP_VERSION, AboutDialog, AppSettingsDialog, DownloadSummaryDialog, MainWindow
@@ -13,6 +14,14 @@ class DownloadSummaryDialogTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self) -> None:
+        self.temp_settings = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp_settings.cleanup)
+        isolated = QSettings(str(Path(self.temp_settings.name) / 'settings.ini'), QSettings.Format.IniFormat)
+        settings_patch = patch('app.main.QSettings', return_value=isolated)
+        settings_patch.start()
+        self.addCleanup(settings_patch.stop)
 
     def test_all_success_uses_success_headline_and_green_count(self) -> None:
         dialog = DownloadSummaryDialog({"完成": 3, "已跳过": 1, "失败": 0, "已停止": 0})
@@ -97,6 +106,42 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertIn(f"源码与更新：GitHub · {APP_GITHUB_REPOSITORY}", labels)
         self.assertEqual(about.github_button.objectName(), "AboutGitHubButton")
 
+    def test_settings_switches_and_feature_review_are_interactive(self) -> None:
+        dialog = AppSettingsDialog(False, True, False)
+        dialog.show()
+        self.app.processEvents()
+        try:
+            QTest.mouseClick(dialog.completion_sound_checkbox, Qt.LeftButton)
+            self.assertTrue(dialog.completion_sound_enabled())
+            QTest.keyClick(dialog.completion_sound_checkbox, Qt.Key_Space)
+            self.assertFalse(dialog.completion_sound_enabled())
+            self.assertFalse(dialog.review_details.isVisible())
+            QTest.mouseClick(dialog.review_button, Qt.LeftButton)
+            self.assertTrue(dialog.review_details.isVisible())
+            QTest.mouseClick(dialog.review_button, Qt.LeftButton)
+            self.assertFalse(dialog.review_details.isVisible())
+            QTest.mouseClick(dialog.findChild(QPushButton, 'SettingsCancelButton'), Qt.LeftButton)
+            self.assertEqual(dialog.result(), QDialog.DialogCode.Rejected)
+        finally:
+            dialog.close()
+
+    def test_button_focus_does_not_add_an_inner_frame(self) -> None:
+        window = MainWindow()
+        window.show()
+        self.app.processEvents()
+        try:
+            for button in (window.settings_button, window.import_button, window.clear_url_button):
+                window.url_text.setFocus()
+                self.app.processEvents()
+                interior = button.rect().adjusted(5, 5, -5, -5)
+                normal = button.grab().toImage().copy(interior)
+                button.setFocus(Qt.TabFocusReason)
+                self.app.processEvents()
+                focused = button.grab().toImage().copy(interior)
+                self.assertEqual(normal, focused, button.objectName())
+        finally:
+            window.close()
+
     def test_completion_sound_preference_persists_in_the_app_settings_store(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             settings_path = Path(temp_dir) / "preferences.ini"
@@ -136,6 +181,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                 dialog.result_summary_enabled.return_value = True
                 dialog.auto_reveal_output_enabled.return_value = True
                 dialog.creator_subfolders_enabled.return_value = True
+                dialog.retain_queue_history_enabled.return_value = True
 
                 window._open_settings()
 

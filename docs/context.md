@@ -1,5 +1,7 @@
 # 南枫下载：当前项目上下文
 
+当前开发、验证和发布现场以 [PROJECT_STATUS.md](PROJECT_STATUS.md) 为准。
+
 > 最后整理：2026-08-23
 >
 > 适用范围：本仓库 `D:\CodexProjects\NanfengDownloader-Windows` 的 Windows 桌面版。

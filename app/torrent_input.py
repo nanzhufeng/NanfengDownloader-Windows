@@ -1,10 +1,25 @@
 from pathlib import Path
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QPlainTextEdit
+from PySide6.QtGui import QKeySequence, QTextCursor
+from PySide6.QtWidgets import QApplication, QPlainTextEdit
 
 
 class DownloadInput(QPlainTextEdit):
     torrent_dropped = Signal(str)
+
+    def keyPressEvent(self, event):
+        if event.matches(QKeySequence.StandardKey.Paste) and not self.isReadOnly():
+            text = QApplication.clipboard().text()
+            if text:
+                cursor = self.textCursor()
+                cursor.beginEditBlock()
+                cursor.select(QTextCursor.SelectionType.Document)
+                cursor.insertText(text)
+                cursor.endEditBlock()
+                self.setTextCursor(cursor)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
     @staticmethod
     def torrent_paths(mime):

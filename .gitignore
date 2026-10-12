@@ -16,6 +16,7 @@ installer/
 
 # Local design sessions and generated previews
 .superpowers/
+.design-preview/
 .worktrees/
 
 # Android local build state and packaged artifacts

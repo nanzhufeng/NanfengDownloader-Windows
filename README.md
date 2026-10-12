@@ -8,9 +8,13 @@
 
 ![南枫下载 Windows 界面预览](docs/assets/nanfeng-downloader-windows-preview.png)
 
+![南枫下载 Windows 设置](docs/assets/nanfeng-downloader-windows-settings.png)
+
+预览来自 Windows v2026.10.12 当前源码实际运行界面：主工作台 1440 × 940、设置页 760 × 620；列表为脱敏演示数据，未启动下载。
+
 ## 下载安装
 
-当前发布版本为 [v2026.09.15](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.15-windows)，使用 Inno Setup 7 构建。设置中新增“关于南枫下载”，展示实际版本、开发时间、开发者信息和 GitHub 仓库入口；磁力链接及 BT 公网验收限制见[发布说明](docs/release-2026.09.15.md)。
+最近已发布版本为 [v2026.09.15](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.09.15-windows)，使用 Inno Setup 7 构建。v2026.10.12 安装包正在准备，发布与签名进度见 [项目状态](docs/PROJECT_STATUS.md)，更新内容见[版本说明](docs/release-2026.10.12.md)。
 
 安装包尚未购买商业代码签名证书，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 

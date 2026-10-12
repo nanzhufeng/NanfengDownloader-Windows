@@ -2,12 +2,13 @@ import json
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtWidgets import QApplication, QComboBox, QPushButton
+from PySide6.QtWidgets import QApplication, QComboBox, QPushButton, QDialog
 
 from app.main import (
     COL_CREATOR,
@@ -16,7 +17,9 @@ from app.main import (
     COL_SELECT,
     COL_STATUS,
     MainWindow,
+    AppSettingsDialog,
     SETTING_QUEUE_STATE,
+    SETTING_RETAIN_QUEUE_HISTORY,
 )
 
 
@@ -28,6 +31,43 @@ class QueuePersistenceTests(unittest.TestCase):
     @staticmethod
     def _settings(path: Path) -> QSettings:
         return QSettings(str(path), QSettings.Format.IniFormat)
+
+    def test_disabling_history_keeps_current_rows_but_restarts_empty(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / 'settings.ini'
+            window = MainWindow(settings=self._settings(path))
+            try:
+                self.assertTrue(window.retain_queue_history)
+                window._add_queue_row('https://example.test/video', '通用', 'test')
+                window._persist_queue_state()
+                dialog = AppSettingsDialog(True, True, False)
+                dialog.retain_queue_history_checkbox.setChecked(False)
+                with patch('app.main.AppSettingsDialog', return_value=dialog), patch.object(dialog, 'exec', return_value=QDialog.DialogCode.Accepted):
+                    window._open_settings()
+                self.assertEqual(window.table.rowCount(), 1)
+                self.assertFalse(window.settings.contains(SETTING_QUEUE_STATE))
+                window._persist_queue_state()
+                self.assertFalse(window.settings.contains(SETTING_QUEUE_STATE))
+            finally:
+                window.close()
+            restarted = MainWindow(settings=self._settings(path))
+            try:
+                self.assertFalse(restarted.retain_queue_history)
+                self.assertEqual(restarted.table.rowCount(), 0)
+            finally:
+                restarted.close()
+
+    def test_disabled_setting_ignores_old_saved_history(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings = self._settings(Path(temp_dir) / 'settings.ini')
+            settings.setValue(SETTING_RETAIN_QUEUE_HISTORY, False)
+            settings.setValue(SETTING_QUEUE_STATE, json.dumps({'version': 1, 'rows': [{'url': 'https://example.test/old'}]}))
+            window = MainWindow(settings=settings)
+            try:
+                self.assertEqual(window.table.rowCount(), 0)
+                self.assertFalse(settings.contains(SETTING_QUEUE_STATE))
+            finally:
+                window.close()
 
     def test_restarting_restores_link_quality_creator_and_resumable_row(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

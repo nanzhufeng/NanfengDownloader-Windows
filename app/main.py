@@ -5,6 +5,8 @@ import sys
 import re
 import time
 import traceback
+import weakref
+from shiboken6 import isValid
 import urllib.request
 try:
     import winsound
@@ -15,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QEvent, QObject, QRect, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -35,6 +37,8 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QSizePolicy,
     QStyle,
+    QStylePainter,
+    QStyleOptionComboBox,
     QStyledItemDelegate,
     QStyleOptionButton,
     QTableWidget,
@@ -70,8 +74,8 @@ from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.09.15"
-APP_DEVELOPED_AT = "2026-09-15 23:06"
+APP_VERSION = "v2026.10.12"
+APP_DEVELOPED_AT = "2026-10-12 13:34"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -88,6 +92,28 @@ SETTING_RESULT_SUMMARY = "notifications/result_summary_enabled"
 SETTING_AUTO_REVEAL_OUTPUT = "completion/auto_reveal_output_enabled"
 SETTING_CREATOR_SUBFOLDERS = "output/organize_by_creator_enabled"
 SETTING_QUEUE_STATE = "workspace/download_queue_state_v1"
+SETTING_RETAIN_QUEUE_HISTORY = "workspace/retain_queue_history"
+
+BUTTON_FEEDBACK_STYLE = """
+    QPushButton, QComboBox, QCheckBox { outline: none; }
+    QPushButton:focus:enabled, QComboBox:focus:enabled {
+        border-color: #73988c;
+    }
+    QPushButton:pressed:enabled {
+        border-color: #496e63;
+    }
+"""
+
+
+def button_feedback_stylesheet(stylesheet: str) -> str:
+    """Recolor each existing border instead of drawing an inset focus frame."""
+    names = sorted(set(re.findall(r'QPushButton#([A-Za-z0-9_]+)', stylesheet)))
+    states = ''.join(
+        f'QPushButton#{name}:focus:enabled {{ border-color: #73988c; outline: none; }} '
+        f'QPushButton#{name}:pressed:enabled {{ border-color: #496e63; outline: none; }} '
+        for name in names
+    )
+    return stylesheet + BUTTON_FEEDBACK_STYLE + states
 QUALITY_OPTIONS = ["自动识别", "1080p 及以下", "720p 及以下", "360p 及以下", "仅音频 MP3"]
 COL_INDEX = 0
 COL_SELECT = 1
@@ -192,36 +218,64 @@ class CenteredCheckBoxDelegate(QStyledItemDelegate):
         style.drawPrimitive(QStyle.PE_IndicatorItemViewItemCheck, checkbox_option, painter, option.widget)
 
 
+class ComboTriggerFilter(QObject):
+    def __init__(self, combo):
+        super().__init__(combo)
+        self.combo = weakref.ref(combo)
+
+    def eventFilter(self, watched, event):
+        if event.type() not in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
+            return False
+        combo = self.combo()
+        if combo is None or not isValid(combo):
+            return False
+        return combo.filter_trigger_click(event)
+
+
 class CenterComboBox(QComboBox):
     def __init__(self) -> None:
         super().__init__()
-        self._popup_open = False
-        self.setEditable(True)
-        self.lineEdit().setReadOnly(True)
-        self.lineEdit().setAlignment(Qt.AlignCenter)
-        self.lineEdit().setFocusPolicy(Qt.NoFocus)
-        self.lineEdit().installEventFilter(self)
+        self._trigger_press_active = False
+        self._trigger_filter = ComboTriggerFilter(self)
+        QApplication.instance().installEventFilter(self._trigger_filter)
+        self.setEditable(False)
 
-    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if watched is self.lineEdit() and event.type() == QEvent.MouseButtonPress:
-            self._toggle_popup()
-            return True
-        return super().eventFilter(watched, event)
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        option.currentText = ""
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+        field = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        painter.drawText(field, Qt.AlignCenter, self.currentText())
 
     def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.LeftButton:
+            super().mousePressEvent(event)
+            return
         self._toggle_popup()
         event.accept()
 
-    def showPopup(self) -> None:
-        self._popup_open = True
-        super().showPopup()
-
-    def hidePopup(self) -> None:
-        self._popup_open = False
-        super().hidePopup()
+    def filter_trigger_click(self, event):
+        if event.type() == QEvent.MouseButtonRelease:
+            self._trigger_press_active = False
+        if (event.type() == QEvent.MouseButtonPress
+                and event.button() == Qt.LeftButton
+                and not self._trigger_press_active
+                and self.view().isVisible()
+                and self.rect().contains(self.mapFromGlobal(event.globalPosition().toPoint()))):
+            self._trigger_press_active = True
+            self.hidePopup()
+            event.accept()
+            return True
+        return False
 
     def _toggle_popup(self) -> None:
-        if self._popup_open or self.view().isVisible():
+        if self._trigger_press_active:
+            return
+        self._trigger_press_active = True
+        if self.view().isVisible():
             self.hidePopup()
         else:
             self.showPopup()
@@ -422,6 +476,52 @@ class AboutDialog(QDialog):
         layout.addWidget(close_button, alignment=Qt.AlignRight)
 
 
+class SettingsSwitch(QCheckBox):
+    """Native checkbox semantics with a single pill-shaped switch surface."""
+    def __init__(self, name, enabled):
+        super().__init__()
+        self.setAccessibleName(name)
+        self.setChecked(enabled)
+        self.setFixedSize(46, 28)
+        self.setCursor(Qt.PointingHandCursor)
+        self._keyboard_focus = False
+
+    def focusInEvent(self, event):
+        self._keyboard_focus = event.reason() in (
+            Qt.TabFocusReason, Qt.BacktabFocusReason, Qt.ShortcutFocusReason,
+        )
+        super().focusInEvent(event)
+        self.update()
+
+    def keyPressEvent(self, event):
+        self._keyboard_focus = True
+        super().keyPressEvent(event)
+        self.update()
+
+    def hitButton(self, position):
+        return self.rect().contains(position)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        color = '#009b72' if self.isChecked() else '#dce2e7'
+        if self.underMouse():
+            color = '#00916b' if self.isChecked() else '#d0d9df'
+        if self.isDown():
+            color = '#008764' if self.isChecked() else '#c8d0d8'
+        if not self.isEnabled():
+            color = '#b7d8ce' if self.isChecked() else '#e4e8eb'
+        painter.setBrush(QColor(color))
+        painter.drawRoundedRect(1, 2, 44, 24, 12, 12)
+        painter.setBrush(QColor('#ffffff'))
+        painter.drawEllipse(24 if self.isChecked() else 4, 5, 18, 18)
+        if self.hasFocus() and self._keyboard_focus:
+            painter.setBrush(Qt.NoBrush)
+            painter.setPen(QPen(QColor('#087c60'), 1))
+            painter.drawRoundedRect(1, 2, 44, 24, 12, 12)
+
+
 class AppSettingsDialog(QDialog):
     """只放用户明确需要的下载偏好，避免把主工作台变成设置页。"""
 
@@ -433,64 +533,129 @@ class AppSettingsDialog(QDialog):
         creator_subfolders_enabled: bool = False,
         parent: QWidget | None = None,
         quality_fallback: str = "ask",
+        retain_queue_history: bool = True,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("AppSettingsDialog")
         self.setWindowTitle("设置")
         self.setModal(True)
-        self.setMinimumWidth(380)
-
+        self.setMinimumWidth(720)
+        self.resize(760, 620)
+        self.setStyleSheet(button_feedback_stylesheet("""
+            QDialog#AppSettingsDialog { background: #ffffff; }
+            QFrame#SettingsCard, QFrame#SettingsReview { background: #f3f6f8; border: none; border-radius: 14px; }
+            QLabel { background: transparent; color: #18303f; font-size: 14px; font-family: "Microsoft YaHei UI"; }
+            QLabel#AppSettingsTitle { font-size: 24px; font-weight: 700; }
+            QLabel#SettingsSectionTitle { font-size: 17px; font-weight: 700; }
+            QLabel#SettingsDescription { font-size: 12px; color: #6d7e8b; }
+            QLabel#SettingsIcon { background: #d9f3ed; border-radius: 18px; }
+            QPushButton { min-height: 36px; padding: 0 18px; border: 1px solid #d8e1e7; border-radius: 18px; background: #ffffff; color: #244353; font-size: 14px; }
+            QPushButton:hover { background: #eef4f2; }
+            QPushButton#SettingsSaveButton { background: #009b72; color: #ffffff; border: 1px solid #009b72; min-width: 76px; }
+            QPushButton#SettingsSaveButton:hover { background: #008764; }
+            QPushButton#SettingsReviewButton { background: transparent; border: 1px solid transparent; text-align: left; border-radius: 12px; }
+            QComboBox { min-height: 34px; padding: 0 28px 0 10px; background: #ffffff; border: 1px solid #d9e2e8; border-radius: 8px; font-size: 13px; color: #18303f; }
+        """))
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(10)
-
-        title = QLabel("完成提醒与行为")
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(14)
+        title = QLabel("设置")
         title.setObjectName("AppSettingsTitle")
         layout.addWidget(title)
+        grid = QGridLayout()
+        grid.setSpacing(14)
+        grid.setColumnStretch(0, 1)
+        grid.setColumnStretch(1, 1)
+        layout.addLayout(grid)
 
-        options_panel = QFrame()
-        options_panel.setObjectName("SettingsOptionsPanel")
-        options_layout = QVBoxLayout(options_panel)
-        options_layout.setContentsMargins(14, 10, 14, 10)
-        options_layout.setSpacing(8)
+        def card(title, icon, row, column):
+            panel = QFrame()
+            panel.setObjectName("SettingsCard")
+            panel.setMinimumWidth(0)
+            body = QVBoxLayout(panel)
+            body.setContentsMargins(18, 18, 18, 18)
+            body.setSpacing(12)
+            heading = QHBoxLayout()
+            badge = QLabel()
+            badge.setObjectName("SettingsIcon")
+            badge.setFixedSize(36, 36)
+            badge.setAlignment(Qt.AlignCenter)
+            badge.setPixmap(self.style().standardIcon(icon).pixmap(20, 20))
+            heading.addWidget(badge)
+            label = QLabel(title)
+            label.setObjectName("SettingsSectionTitle")
+            heading.addWidget(label)
+            heading.addStretch()
+            body.addLayout(heading)
+            grid.addWidget(panel, row, column)
+            return body
 
-        self.completion_sound_checkbox = QCheckBox("完成提示音")
-        self.completion_sound_checkbox.setObjectName("CompletionSoundCheckBox")
-        self.completion_sound_checkbox.setChecked(completion_sound_enabled)
-        self.completion_sound_checkbox.setToolTip("下载任务结束时播放 Windows 系统提示音。")
-        options_layout.addWidget(self.completion_sound_checkbox)
+        def switch(body, text, enabled, object_name):
+            row = QHBoxLayout()
+            label = QLabel(text)
+            label.setWordWrap(True)
+            control = SettingsSwitch(text, enabled)
+            control.setObjectName(object_name)
+            label.setBuddy(control)
+            row.addWidget(label, 1)
+            row.addWidget(control)
+            body.addLayout(row)
+            return control
 
-        self.result_summary_checkbox = QCheckBox("完成提示")
-        self.result_summary_checkbox.setObjectName("ResultSummaryCheckBox")
-        self.result_summary_checkbox.setChecked(result_summary_enabled)
-        self.result_summary_checkbox.setToolTip("下载任务结束时显示成功、失败、跳过和停止的结果摘要。")
-        options_layout.addWidget(self.result_summary_checkbox)
+        def hint(body, text):
+            label = QLabel(text)
+            label.setObjectName("SettingsDescription")
+            label.setWordWrap(True)
+            body.addWidget(label)
 
-        self.auto_reveal_output_checkbox = QCheckBox("完成后自动打开目录")
-        self.auto_reveal_output_checkbox.setObjectName("AutoRevealOutputCheckBox")
-        self.auto_reveal_output_checkbox.setChecked(auto_reveal_output_enabled)
-        self.auto_reveal_output_checkbox.setToolTip("全部成功时，使用列表“定位”同一方式，在资源管理器中选中最新完成的视频。")
-        options_layout.addWidget(self.auto_reveal_output_checkbox)
-
-        self.creator_subfolders_checkbox = QCheckBox("按频道/作者分文件夹")
-        self.creator_subfolders_checkbox.setObjectName("CreatorSubfoldersCheckBox")
-        self.creator_subfolders_checkbox.setChecked(creator_subfolders_enabled)
-        self.creator_subfolders_checkbox.setToolTip("关闭时只按平台建文件夹；开启后，新下载文件再按频道或作者分目录。")
-        options_layout.addWidget(self.creator_subfolders_checkbox)
-        options_layout.addWidget(QLabel("源站没有所选画质时"))
-        self.quality_fallback_combo = QComboBox()
-        for text, value in [("每批询问一次", "ask"), ("自动下载原画质", "original"), ("自动转为所选画质（耗时更长）", "convert")]:
+        reminders = card("完成提醒", QStyle.SP_MediaVolume, 0, 0)
+        self.completion_sound_checkbox = switch(reminders, "完成提示音", completion_sound_enabled, "CompletionSoundCheckBox")
+        self.result_summary_checkbox = switch(reminders, "完成结果提示", result_summary_enabled, "ResultSummaryCheckBox")
+        self.auto_reveal_output_checkbox = switch(reminders, "完成后定位文件", auto_reveal_output_enabled, "AutoRevealOutputCheckBox")
+        hint(reminders, "全部成功后，在资源管理器中选中最新完成的文件。")
+        files = card("文件整理", QStyle.SP_DirIcon, 0, 1)
+        self.creator_subfolders_checkbox = switch(files, "按频道／作者分文件夹", creator_subfolders_enabled, "CreatorSubfoldersCheckBox")
+        hint(files, "关闭时仅按平台整理；开启后，新下载文件再按频道或作者分目录。")
+        files.addStretch()
+        history = card("列表记录", QStyle.SP_BrowserReload, 1, 0)
+        self.retain_queue_history_checkbox = switch(history, "保留列表历史记录", retain_queue_history, "RetainQueueHistoryCheckBox")
+        hint(history, "开启后，下次启动恢复列表；关闭并保存后清除已保存的记录，当前列表保留到退出。")
+        history.addStretch()
+        quality = card("画质选择", QStyle.SP_ComputerIcon, 1, 1)
+        quality.addWidget(QLabel("源站没有所选画质时"))
+        self.quality_fallback_combo = CenterComboBox()
+        for text, value in [("每批询问一次", "ask"), ("自动下载原画质", "original"), ("自动转为所选画质", "convert")]:
             self.quality_fallback_combo.addItem(text, value)
         self.quality_fallback_combo.setCurrentIndex(max(0, self.quality_fallback_combo.findData(quality_fallback)))
-        options_layout.addWidget(self.quality_fallback_combo)
-        layout.addWidget(options_panel)
+        self.quality_fallback_combo.setAccessibleName("源站没有所选画质时")
+        quality.addWidget(self.quality_fallback_combo)
+        hint(quality, "可选择下载原画质或转换画质；转换需要更长时间。")
+        quality.addStretch()
 
+        review = QFrame()
+        review.setObjectName("SettingsReview")
+        review_layout = QVBoxLayout(review)
+        review_layout.setContentsMargins(4, 4, 4, 4)
+        self.review_button = QPushButton("功能审阅")
+        self.review_button.setObjectName("SettingsReviewButton")
+        self.review_button.setCheckable(True)
+        self.review_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
+        review_layout.addWidget(self.review_button)
+        self.review_details = QLabel("列表历史记录：建议保留，设置内随时开关，方便恢复待下载任务。\n粘贴替换链接：建议保留，Ctrl+V 直接更新输入，无需增加常驻按键。")
+        self.review_details.setObjectName("SettingsDescription")
+        self.review_details.setWordWrap(True)
+        self.review_details.setContentsMargins(14, 0, 14, 12)
+        self.review_details.hide()
+        review_layout.addWidget(self.review_details)
+        self.review_button.toggled.connect(self.review_details.setVisible)
+        self.review_button.toggled.connect(lambda opened: self.review_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp if opened else QStyle.SP_ArrowDown)))
+        layout.addWidget(review)
+        buttons = QHBoxLayout()
         self.about_button = QPushButton("关于南枫下载")
         self.about_button.setObjectName("OpenAboutButton")
+        self.about_button.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxInformation))
         self.about_button.clicked.connect(self._open_about)
-        layout.addWidget(self.about_button, alignment=Qt.AlignLeft)
-
-        buttons = QHBoxLayout()
+        buttons.addWidget(self.about_button)
         buttons.addStretch(1)
         cancel_button = QPushButton("取消")
         cancel_button.setObjectName("SettingsCancelButton")
@@ -514,6 +679,9 @@ class AppSettingsDialog(QDialog):
 
     def creator_subfolders_enabled(self) -> bool:
         return self.creator_subfolders_checkbox.isChecked()
+
+    def retain_queue_history_enabled(self) -> bool:
+        return self.retain_queue_history_checkbox.isChecked()
 
     def _open_about(self) -> None:
         AboutDialog(self).exec()
@@ -708,6 +876,9 @@ class MainWindow(QMainWindow):
         self.project_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
         self.ffmpeg_dir = find_ffmpeg_dir(self.project_root)
         self.settings = settings if settings is not None else QSettings(SETTINGS_ORGANIZATION, APP_NAME)
+        self.retain_queue_history = setting_as_bool(
+            self.settings.value(SETTING_RETAIN_QUEUE_HISTORY, True), default=True,
+        )
         self.completion_sound_enabled = setting_as_bool(
             self.settings.value(SETTING_COMPLETION_SOUND, True),
             default=True,
@@ -1662,7 +1833,7 @@ class MainWindow(QMainWindow):
                 border-radius: 5px;
             }
             """
-        self.setStyleSheet(stylesheet.replace("__CHEVRON_ICON__", chevron_icon))
+        self.setStyleSheet(button_feedback_stylesheet(stylesheet.replace("__CHEVRON_ICON__", chevron_icon)))
 
     def _update_status(self) -> None:
         self.status_label.setText(f"队列: {self.table.rowCount()} 项")
@@ -1688,6 +1859,7 @@ class MainWindow(QMainWindow):
             self.creator_subfolders_enabled,
             self,
             quality_fallback=read_quality_fallback(self.settings),
+            retain_queue_history=self.retain_queue_history,
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -1701,6 +1873,10 @@ class MainWindow(QMainWindow):
             creator_subfolders_enabled=dialog.creator_subfolders_enabled(),
         )
         self._show_settings_saved_message()
+        self.retain_queue_history = bool(dialog.retain_queue_history_enabled())
+        self.settings.setValue(SETTING_RETAIN_QUEUE_HISTORY, self.retain_queue_history)
+        self._last_queue_state_json = ""
+        self._persist_queue_state()
 
     def _set_completion_sound_enabled(self, enabled: bool) -> None:
         self._set_completion_preferences(completion_sound_enabled=enabled)
@@ -1831,6 +2007,12 @@ class MainWindow(QMainWindow):
         return {"version": 1, "rows": rows}
 
     def _persist_queue_state(self) -> None:
+        if not self.retain_queue_history:
+            self.queue_persist_timer.stop()
+            self.settings.remove(SETTING_QUEUE_STATE)
+            self.settings.sync()
+            self._last_queue_state_json = ""
+            return
         if self._restoring_queue:
             return
         serialized = json.dumps(self._queue_state_payload(), ensure_ascii=False, separators=(",", ":"))
@@ -1841,6 +2023,9 @@ class MainWindow(QMainWindow):
         self._last_queue_state_json = serialized
 
     def _restore_queue_state(self) -> None:
+        if not self.retain_queue_history:
+            self._persist_queue_state()
+            return
         raw_state = self.settings.value(SETTING_QUEUE_STATE, "")
         if isinstance(raw_state, bytes):
             raw_state = raw_state.decode("utf-8", errors="replace")
@@ -2915,6 +3100,7 @@ class MainWindow(QMainWindow):
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     migration_message = ""
     try:
         cleanup_runtime_cookie_exports()
