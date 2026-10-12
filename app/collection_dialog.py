@@ -1,5 +1,6 @@
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QLabel, QComboBox
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem, QPushButton, QLabel
+from .combo_box import CenterComboBox
 
 
 class DragCheckList(QListWidget):
@@ -64,7 +65,7 @@ class CollectionDialog(QDialog):
         search = QLineEdit()
         search.setPlaceholderText('搜索标题或集数')
         layout.addWidget(search)
-        grouping = QComboBox()
+        grouping = CenterComboBox()
         grouping.addItems(['逐集选择', '每5集成组选择', '每10集成组选择'])
         grouping.setToolTip('按列表顺序分组；支持按住鼠标滑动勾选，不合并视频文件。搜索时只操作可见项。')
         layout.addWidget(grouping)

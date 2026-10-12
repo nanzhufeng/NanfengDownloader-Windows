@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.ui_fixtures import isolated_main_window
+
 import os
 import unittest
 
@@ -99,14 +101,14 @@ class TikTokCatalogTests(unittest.TestCase):
 
 
 class TikTokLoginLayoutTests(unittest.TestCase):
-    def test_tiktok_login_is_added_without_moving_existing_input_rows(self) -> None:
+    def test_tiktok_login_uses_sidebar_column_and_keeps_path_space(self) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
 
         from app.main import MainWindow
 
         app = QApplication.instance() or QApplication([])
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.resize(1820, 1130)
             window.show()
@@ -119,10 +121,11 @@ class TikTokLoginLayoutTests(unittest.TestCase):
                 window.login_tiktok_button,
             ]
             self.assertEqual([button.width() for button in buttons], [150] * 5)
-            self.assertEqual(len({button.geometry().y() for button in buttons}), 1)
-            self.assertEqual(window.output_edit.width(), window.url_text.width())
-            self.assertEqual(window.clear_url_button.geometry().x(), window.import_button.geometry().x())
-            self.assertGreater(window.clear_url_button.geometry().y(), window.import_button.geometry().y())
+            self.assertEqual(len({button.geometry().x() for button in buttons}), 1)
+            self.assertTrue(all(window.sidebar.isAncestorOf(button) for button in buttons))
+            self.assertGreaterEqual(window.output_edit.width(), 320)
+            self.assertGreater(window.clear_url_button.geometry().x(), window.import_button.geometry().x())
+            self.assertEqual(window.clear_url_button.geometry().y(), window.import_button.geometry().y())
         finally:
             window.close()
             app.processEvents()

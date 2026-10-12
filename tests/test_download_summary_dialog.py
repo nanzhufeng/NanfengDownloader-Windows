@@ -1,3 +1,5 @@
+
+from tests.ui_fixtures import isolated_main_window
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,7 +55,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertLessEqual(dialog.success_card.minimumHeight(), 64)
 
     def test_summary_counts_only_the_active_batch_rows(self) -> None:
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             for index in range(3):
                 window._add_queue_row(
@@ -126,7 +128,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             dialog.close()
 
     def test_button_focus_does_not_add_an_inner_frame(self) -> None:
-        window = MainWindow()
+        window = isolated_main_window()
         window.show()
         self.app.processEvents()
         try:
@@ -171,7 +173,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                 reloaded.close()
 
     def test_saving_preferences_shows_a_green_bottom_bar_confirmation_without_replacing_status(self) -> None:
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.status_label.setText("FFmpeg 已就绪 | 队列: 0 项")
             with patch("app.main.AppSettingsDialog") as dialog_type:
@@ -192,7 +194,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             window.close()
 
     def test_summary_plays_system_notification_once_when_enabled(self) -> None:
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.completion_sound_enabled = True
             window.result_summary_enabled = True
@@ -208,7 +210,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             window.close()
 
     def test_summary_stays_silent_when_completion_sound_is_disabled(self) -> None:
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.completion_sound_enabled = False
             window.result_summary_enabled = True
@@ -224,7 +226,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             window.close()
 
     def test_summary_can_be_disabled_without_disabling_completion_sound(self) -> None:
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.completion_sound_enabled = True
             window.result_summary_enabled = False
@@ -244,7 +246,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             second_file = Path(temp_dir) / "second.mp4"
             first_file.write_bytes(b"first")
             second_file.write_bytes(b"second")
-            window = MainWindow()
+            window = isolated_main_window()
             try:
                 for index, file_path in enumerate((first_file, second_file)):
                     window._add_queue_row(
@@ -276,7 +278,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             output_file = Path(temp_dir) / "completed.mp4"
             output_file.write_bytes(b"done")
-            window = MainWindow()
+            window = isolated_main_window()
             try:
                 for index in range(2):
                     window._add_queue_row(

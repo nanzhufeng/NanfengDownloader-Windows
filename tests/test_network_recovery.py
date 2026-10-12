@@ -1,3 +1,5 @@
+
+from tests.ui_fixtures import isolated_main_window
 import os
 import unittest
 from unittest.mock import patch
@@ -16,7 +18,7 @@ class NetworkRecoveryTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = isolated_main_window()
         self.window.table.setRowCount(1)
         select_item = QTableWidgetItem()
         select_item.setCheckState(Qt.Checked)

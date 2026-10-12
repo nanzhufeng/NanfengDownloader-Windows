@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          $metadata = python scripts\release_metadata.py --tag "$env:RELEASE_TAG" --format json | ConvertFrom-Json
+          $metadata = python scripts\release_metadata.py --tag "$env:RELEASE_TAG" --check-source app\main.py --format json | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Release tag is invalid.' }
           $existingRelease = gh release view $env:RELEASE_TAG --json isDraft 2>$null
           $draftExists = $false
@@ -113,8 +113,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           $installer = Get-Item (Join-Path '.\installer\releases' $env:RELEASE_INSTALLER_NAME) -ErrorAction Stop
-          $hash = (Get-FileHash $installer.FullName -Algorithm SHA256).Hash
-          $notes = "Windows 安装包，使用 Inno Setup 7 x64 构建。`n`nSHA-256: ``$hash``"
+          $notes = "Windows 未签名安装包，使用 Inno Setup 7 x64 构建。"
           if ($env:RELEASE_DRAFT_EXISTS -ne 'True') {
             gh release create $env:RELEASE_TAG --draft --target $env:GITHUB_SHA --title "南枫下载 Windows $env:RELEASE_TAG" --notes $notes
           }

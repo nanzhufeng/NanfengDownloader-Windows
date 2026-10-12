@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.ui_fixtures import isolated_main_window
+
 import os
 import tempfile
 import unittest
@@ -44,7 +46,7 @@ class QueueLocateButtonTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = isolated_main_window()
 
     def tearDown(self) -> None:
         self.window.close()

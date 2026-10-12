@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 import unittest
+import tempfile
 from pathlib import Path
 
 
@@ -20,6 +21,16 @@ release_metadata = _load_release_metadata_module()
 
 
 class ReleaseMetadataTests(unittest.TestCase):
+    def test_source_about_version_must_match_requested_installer_version(self) -> None:
+        metadata = release_metadata.release_metadata('2026.10.12')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'main.py'
+            source.write_text('APP_VERSION = "v2026.09.15"\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, '不一致'):
+                release_metadata.validate_source_version(metadata, source)
+            source.write_text('APP_VERSION = "v2026.10.12"\n', encoding='utf-8')
+            release_metadata.validate_source_version(metadata, source)
+
     def test_version_generates_one_consistent_tag_and_installer_name(self) -> None:
         metadata = release_metadata.release_metadata("2026.08.21")
 
@@ -40,6 +51,15 @@ class ReleaseMetadataTests(unittest.TestCase):
 
 
 class InstallerContractTests(unittest.TestCase):
+    def test_release_notes_do_not_publish_hashes_or_require_windows_signing(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/release-windows.yml').read_text(encoding='utf-8')
+        builder = (root / 'scripts/build_windows_installer.ps1').read_text(encoding='utf-8-sig')
+        self.assertNotIn('SHA-256:', workflow)
+        self.assertNotIn('Write-Output "SHA-256:', builder)
+        self.assertNotIn('signtool', workflow.lower())
+        self.assertIn('未签名', workflow)
+
     def test_installer_requires_explicit_version_and_never_force_closes_apps(self) -> None:
         root = Path(__file__).resolve().parents[1]
         content = (root / "packaging" / "windows" / "NanfengDownloader.iss").read_text(encoding="utf-8-sig")

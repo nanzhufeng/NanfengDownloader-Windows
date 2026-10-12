@@ -1,3 +1,5 @@
+
+from tests.ui_fixtures import isolated_main_window
 import os
 import tempfile
 import unittest
@@ -16,7 +18,7 @@ class ExistingMediaDeduplicationTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self) -> None:
-        self.window = MainWindow()
+        self.window = isolated_main_window()
 
     def tearDown(self) -> None:
         self.window.close()

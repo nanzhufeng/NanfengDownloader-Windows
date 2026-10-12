@@ -118,8 +118,11 @@ def _build_cookie_jar(options: DownloadOptions) -> http.cookiejar.CookieJar | No
     return None
 
 
-def _build_opener(options: DownloadOptions) -> urllib.request.OpenerDirector:
-    handlers: list[Any] = [urllib.request.HTTPRedirectHandler()]
+def _build_opener(
+    options: DownloadOptions,
+    redirect_handler: urllib.request.HTTPRedirectHandler | None = None,
+) -> urllib.request.OpenerDirector:
+    handlers: list[Any] = [redirect_handler or urllib.request.HTTPRedirectHandler()]
     cookie_jar = _build_cookie_jar(options)
     if cookie_jar:
         handlers.append(urllib.request.HTTPCookieProcessor(cookie_jar))
@@ -172,19 +175,57 @@ def _extract_aweme_id(url: str, html: str = "") -> str | None:
 
 
 def _extract_sec_uid(url: str, html: str = "") -> str | None:
-    candidates = [
-        r"/share/user/([^/?&#]+)",
-        r"/user/([^/?&#]+)",
-        r"[?&]sec_uid=([^&]+)",
-        r'"sec_uid"\s*:\s*"([^"]+)"',
-        r'"secUid"\s*:\s*"([^"]+)"',
-    ]
-    haystack = f"{url}\n{html}"
-    for pattern in candidates:
-        match = re.search(pattern, haystack)
-        if match:
-            return urllib.parse.unquote(match.group(1))
+    # URL identity and page JSON are separate sources. Combining them with a
+    # newline let the path capture consume HTML and contaminate the author ID.
+    for source, patterns in (
+        (url, (r"/share/user/([^/?&#\s]+)", r"/user/([^/?&#\s]+)", r"[?&]sec_uid=([^&#\s]+)")),
+        (html, (r'"sec_uid"\s*:\s*"([^"\s]+)"', r'"secUid"\s*:\s*"([^"\s]+)"')),
+    ):
+        for pattern in patterns:
+            match = re.search(pattern, source)
+            if match:
+                return urllib.parse.unquote(match.group(1)).strip()
     return None
+
+
+class _CatalogSourceResolved(Exception):
+    def __init__(self, url: str):
+        self.url = url
+        super().__init__("抖音目录链接已识别")
+
+
+class _CatalogRedirectHandler(urllib.request.HTTPRedirectHandler):
+    max_redirections = 4
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not is_douyin_url(newurl):
+            fp.close()
+            raise RuntimeError("抖音分享链接跳转到了其他网站，请重新复制作品或作者主页链接。")
+        if is_douyin_url(newurl) and (_extract_aweme_id(newurl) or _extract_sec_uid(newurl)):
+            # The Location header already identifies the work/profile. Fetching
+            # its anti-bot page or media streams is unnecessary for queueing.
+            fp.close()
+            raise _CatalogSourceResolved(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _resolve_douyin_catalog_source(url: str, options: DownloadOptions) -> str:
+    if _extract_aweme_id(url) or _extract_sec_uid(url):
+        return url
+    opener = _build_opener(options, redirect_handler=_CatalogRedirectHandler())
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Language": "zh-CN,zh;q=0.9"})
+    try:
+        with opener.open(request, timeout=8) as response:
+            final_url = response.geturl()
+            if not is_douyin_url(final_url):
+                raise RuntimeError("抖音分享链接没有返回抖音作品或作者主页，请重新复制链接。")
+            # Never infer the source identity from homepage recommendations.
+            # The redirect URL is enough; reading the response body adds I/O.
+            return final_url
+    except _CatalogSourceResolved as resolved:
+        return resolved.url
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError("抖音分享链接未能完成跳转，请重试或粘贴作品 /video/、/note/ 或作者 /user/ 地址。") from exc
 
 
 def _extract_author_from_html(html: str) -> str | None:
@@ -430,6 +471,14 @@ def _collect_aweme_catalog_items(
     return items
 
 
+def _author_page_is_complete(data: dict[str, Any]) -> bool:
+    return (
+        data.get("status_code", 0) == 0
+        and isinstance(data.get("aweme_list"), list)
+        and data.get("has_more") in (False, 0)
+    )
+
+
 def _request_douyin_author_api(
     opener: urllib.request.OpenerDirector,
     sec_uid: str,
@@ -536,10 +585,13 @@ def _wait_for_catalog_growth(
     previous_count: int,
     timeout_ms: int,
     poll_ms: int = 250,
+    stop_waiting: Callable[[], bool] | None = None,
 ) -> bool:
     for _ in range(_capture_wait_rounds(timeout_ms, poll_ms)):
         if len(catalog) > previous_count:
             return True
+        if stop_waiting and stop_waiting():
+            return False
         page.wait_for_timeout(poll_ms)
     return len(catalog) > previous_count
 
@@ -560,6 +612,7 @@ def _discover_douyin_with_browser(
     catalog: list[dict[str, str | None]] = []
     seen: set[str] = set()
     current_author = author_name
+    catalog_complete = False
 
     def add_items(items: list[dict[str, str | None]]) -> None:
         nonlocal current_author
@@ -591,6 +644,7 @@ def _discover_douyin_with_browser(
         page = context.new_page()
 
         def on_response(response: Any) -> None:
+            nonlocal catalog_complete
             lower = response.url.lower()
             if "aweme" not in lower and "post" not in lower:
                 return
@@ -607,15 +661,18 @@ def _discover_douyin_with_browser(
                         target_author=author_name,
                     )
                 )
+                response_author = urllib.parse.parse_qs(urllib.parse.urlparse(response.url).query).get("sec_user_id", [])
+                if "/aweme/post/" in lower and sec_uid in response_author and _author_page_is_complete(data):
+                    catalog_complete = True
 
         page.on("response", on_response)
         page.goto(page_url, wait_until="domcontentloaded", timeout=30_000)
-        _wait_for_catalog_growth(page, catalog, previous_count=0, timeout_ms=3_000)
+        _wait_for_catalog_growth(page, catalog, previous_count=0, timeout_ms=3_000, stop_waiting=lambda: catalog_complete)
         max_scrolls = min(120, max(12, max_items // 6))
         idle_rounds = 0
         last_count = len(catalog)
         for _ in range(max_scrolls):
-            if len(catalog) >= max_items:
+            if len(catalog) >= max_items or catalog_complete:
                 break
             page.evaluate(
                 """
@@ -629,7 +686,7 @@ def _discover_douyin_with_browser(
                 }
                 """
             )
-            grew = _wait_for_catalog_growth(page, catalog, last_count, timeout_ms=1_500)
+            grew = _wait_for_catalog_growth(page, catalog, last_count, timeout_ms=1_500, stop_waiting=lambda: catalog_complete)
             if not grew:
                 idle_rounds += 1
                 if idle_rounds >= 4:
@@ -648,34 +705,20 @@ def discover_douyin_author_items(url: str, options: DownloadOptions, max_items: 
     """把抖音作者页短链解析为作品列表，供界面勾选下载。"""
     from .catalog import CatalogItem
 
-    opener = _build_opener(options)
-    final_url, html = _request_text(opener, url)
-    sec_uid = _extract_sec_uid(final_url, html)
+    final_url = _resolve_douyin_catalog_source(url, options)
+    sec_uid = _extract_sec_uid(final_url)
     source_aweme_id = _extract_aweme_id(final_url) or _extract_aweme_id(url)
-    aweme_id = source_aweme_id or _extract_aweme_id(final_url, html)
-    author_name = _extract_author_from_html(html)
+    author_name = None
 
-    if source_aweme_id or (not sec_uid and aweme_id):
-        item_aweme_id = source_aweme_id or aweme_id
-        try:
-            info = _fetch_douyin_info(final_url, options)
-        except Exception:
-            info = None
-        if info:
-            return [
-                CatalogItem(
-                    platform="抖音",
-                    title=info.title,
-                    url=f"https://www.douyin.com/video/{info.aweme_id}",
-                    publish_date=info.publish_date,
-                    creator_name=info.author_name,
-                )
-            ]
+    if source_aweme_id:
+        item_aweme_id = source_aweme_id
+        title = f"抖音作品 {item_aweme_id}（下载时解析）"
+        kind = "note" if "/note/" in final_url else "video"
         return [
             CatalogItem(
                 platform="抖音",
-                title=f"抖音视频 {item_aweme_id}",
-                url=f"https://www.douyin.com/video/{item_aweme_id}",
+                title=title,
+                url=f"https://www.douyin.com/{kind}/{item_aweme_id}",
                 publish_date=None,
                 creator_name=author_name,
             )
@@ -685,8 +728,10 @@ def discover_douyin_author_items(url: str, options: DownloadOptions, max_items: 
         raise RuntimeError("没有从抖音链接解析到作者页。请复制作者主页分享链接，或作品页链接。")
 
     referer = f"https://www.douyin.com/user/{sec_uid}"
+    opener = _build_opener(options)
     raw_items: list[dict[str, str | None]] = []
     cursor = 0
+    api_complete = False
     for _ in range(50):
         data = _request_douyin_author_api(opener, sec_uid, cursor, referer)
         if not data:
@@ -700,14 +745,17 @@ def discover_douyin_author_items(url: str, options: DownloadOptions, max_items: 
                 target_author=author_name,
             )
         )
-        if len(raw_items) >= max_items or not data.get("has_more"):
+        api_complete = _author_page_is_complete(data)
+        if len(raw_items) >= max_items or api_complete:
+            break
+        if not data.get("has_more"):
             break
         next_cursor = data.get("max_cursor")
         if not isinstance(next_cursor, int) or next_cursor == cursor:
             break
         cursor = next_cursor
 
-    if len(raw_items) < max_items:
+    if len(raw_items) < max_items and not api_complete:
         try:
             raw_items.extend(_discover_douyin_with_browser(sec_uid, options, max_items=max_items, author_name=author_name))
         except Exception:

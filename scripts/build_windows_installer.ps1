@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$Version,
     [switch]$SkipTests,
@@ -34,7 +34,7 @@ try {
     if ([string]::IsNullOrWhiteSpace($Version)) {
         throw "Version is required. Example: -Version 2026.08.21"
     }
-    $metadata = python scripts\release_metadata.py --version $Version --format json | ConvertFrom-Json
+    $metadata = python scripts\release_metadata.py --version $Version --check-source app\main.py --format json | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0) {
         throw "Release version is invalid."
     }
@@ -81,9 +81,7 @@ try {
     New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
     Move-Item -LiteralPath $installer -Destination $releaseInstaller -ErrorAction Stop
 
-    $hash = Get-FileHash -LiteralPath $releaseInstaller -Algorithm SHA256
     Write-Output "Installer: $releaseInstaller"
-    Write-Output "SHA-256: $($hash.Hash)"
 }
 finally {
     $env:PATH = $originalPath

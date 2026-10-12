@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import re
 import time
 import traceback
-import weakref
-from shiboken6 import isValid
 import urllib.request
 try:
     import winsound
@@ -16,8 +15,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QRect, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QIcon, QPixmap, QPainter, QPen
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -37,8 +36,6 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QSizePolicy,
     QStyle,
-    QStylePainter,
-    QStyleOptionComboBox,
     QStyledItemDelegate,
     QStyleOptionButton,
     QTableWidget,
@@ -58,6 +55,7 @@ from .auth_profile import (
     open_login_browser,
 )
 from .catalog import CatalogItem, discover_links
+from .combo_box import CenterComboBox
 from .downloader import (
     DownloadOptions,
     DownloadStopped,
@@ -74,8 +72,8 @@ from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.12"
-APP_DEVELOPED_AT = "2026-10-12 13:34"
+APP_VERSION = "v2026.10.12.1"
+APP_DEVELOPED_AT = "2026-10-12 18:43"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -94,26 +92,57 @@ SETTING_CREATOR_SUBFOLDERS = "output/organize_by_creator_enabled"
 SETTING_QUEUE_STATE = "workspace/download_queue_state_v1"
 SETTING_RETAIN_QUEUE_HISTORY = "workspace/retain_queue_history"
 
-BUTTON_FEEDBACK_STYLE = """
-    QPushButton, QComboBox, QCheckBox { outline: none; }
-    QPushButton:focus:enabled, QComboBox:focus:enabled {
-        border-color: #73988c;
-    }
-    QPushButton:pressed:enabled {
-        border-color: #496e63;
-    }
-"""
-
-
 def button_feedback_stylesheet(stylesheet: str) -> str:
-    """Recolor each existing border instead of drawing an inset focus frame."""
+    """Remove button outlines in every state while retaining fill-based feedback."""
     names = sorted(set(re.findall(r'QPushButton#([A-Za-z0-9_]+)', stylesheet)))
-    states = ''.join(
-        f'QPushButton#{name}:focus:enabled {{ border-color: #73988c; outline: none; }} '
-        f'QPushButton#{name}:pressed:enabled {{ border-color: #496e63; outline: none; }} '
+    button_ids = "\n".join(
+        f"QPushButton#{name}, QPushButton#{name}:hover, "
+        f"QPushButton#{name}:focus, QPushButton#{name}:pressed, "
+        f"QPushButton#{name}:disabled {{ border: none; outline: none; "
+        f"min-height: 36px; max-height: 36px; padding-top: 0; padding-bottom: 0; border-radius: 18px; }}"
         for name in names
     )
-    return stylesheet + BUTTON_FEEDBACK_STYLE + states
+    neutral_buttons = ["QPushButton"] + [
+        f"QPushButton#{name}" for name in (
+            "SettingsButton", "SettingsCancelButton", "SettingsReviewButton",
+            "OpenAboutButton", "AboutGitHubButton", "AboutCloseButton", "ClearButton",
+        )
+    ]
+    neutral_states = "\n".join(
+        ", ".join(selector + state for selector in neutral_buttons)
+        + f" {{ background: {color}; }}"
+        for state, color in (
+            ("", "#eef0f3"), (":hover:enabled", "#e1e5ea"),
+            (":pressed:enabled", "#d5dce3"),
+            (":disabled", "#f0f2f5"),
+        )
+    )
+    return stylesheet + """
+        QPushButton, QPushButton:hover, QPushButton:focus,
+        QPushButton:pressed, QPushButton:disabled {
+            border: none;
+            outline: none;
+            min-height: 36px;
+            max-height: 36px;
+            padding-top: 0;
+            padding-bottom: 0;
+            border-radius: 18px;
+        }
+        QComboBox, QCheckBox { outline: none; }
+    """ + button_ids + neutral_states + """
+        QPushButton#ChooseButton, QPushButton#ChooseButton:hover,
+        QPushButton#ChooseButton:focus, QPushButton#ChooseButton:pressed,
+        QPushButton#ChooseButton:disabled {
+            border-radius: 8px;
+        }
+        QPushButton#LocateButton, QPushButton#LocateButton:hover,
+        QPushButton#LocateButton:focus, QPushButton#LocateButton:pressed,
+        QPushButton#LocateButton:disabled {
+            min-height: 24px;
+            max-height: 24px;
+            border-radius: 12px;
+        }
+    """
 QUALITY_OPTIONS = ["自动识别", "1080p 及以下", "720p 及以下", "360p 及以下", "仅音频 MP3"]
 COL_INDEX = 0
 COL_SELECT = 1
@@ -218,67 +247,44 @@ class CenteredCheckBoxDelegate(QStyledItemDelegate):
         style.drawPrimitive(QStyle.PE_IndicatorItemViewItemCheck, checkbox_option, painter, option.widget)
 
 
-class ComboTriggerFilter(QObject):
-    def __init__(self, combo):
-        super().__init__(combo)
-        self.combo = weakref.ref(combo)
+class StatusPillDelegate(QStyledItemDelegate):
+    """用轻色胶囊区分队列状态，避免把整张表格单元染色。"""
 
-    def eventFilter(self, watched, event):
-        if event.type() not in (QEvent.MouseButtonPress, QEvent.MouseButtonRelease):
-            return False
-        combo = self.combo()
-        if combo is None or not isValid(combo):
-            return False
-        return combo.filter_trigger_click(event)
-
-
-class CenterComboBox(QComboBox):
-    def __init__(self) -> None:
-        super().__init__()
-        self._trigger_press_active = False
-        self._trigger_filter = ComboTriggerFilter(self)
-        QApplication.instance().installEventFilter(self._trigger_filter)
-        self.setEditable(False)
-
-    def paintEvent(self, event):
-        painter = QStylePainter(self)
-        option = QStyleOptionComboBox()
-        self.initStyleOption(option)
-        option.currentText = ""
-        painter.drawComplexControl(QStyle.CC_ComboBox, option)
-        field = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self)
-        painter.setPen(self.palette().color(self.foregroundRole()))
-        painter.drawText(field, Qt.AlignCenter, self.currentText())
-
-    def mousePressEvent(self, event) -> None:
-        if event.button() != Qt.LeftButton:
-            super().mousePressEvent(event)
+    def paint(self, painter, option, index) -> None:
+        background_data = index.data(Qt.BackgroundRole)
+        foreground_data = index.data(Qt.ForegroundRole)
+        background = background_data.color() if isinstance(background_data, QBrush) else background_data
+        foreground = foreground_data.color() if isinstance(foreground_data, QBrush) else foreground_data
+        text = index.data(Qt.DisplayRole)
+        if not isinstance(background, QColor) or not text:
+            super().paint(painter, option, index)
             return
-        self._toggle_popup()
-        event.accept()
 
-    def filter_trigger_click(self, event):
-        if event.type() == QEvent.MouseButtonRelease:
-            self._trigger_press_active = False
-        if (event.type() == QEvent.MouseButtonPress
-                and event.button() == Qt.LeftButton
-                and not self._trigger_press_active
-                and self.view().isVisible()
-                and self.rect().contains(self.mapFromGlobal(event.globalPosition().toPoint()))):
-            self._trigger_press_active = True
-            self.hidePopup()
-            event.accept()
-            return True
-        return False
+        style = option.widget.style() if option.widget else QApplication.style()
+        style.drawPrimitive(QStyle.PE_PanelItemViewItem, option, painter, option.widget)
 
-    def _toggle_popup(self) -> None:
-        if self._trigger_press_active:
-            return
-        self._trigger_press_active = True
-        if self.view().isVisible():
-            self.hidePopup()
-        else:
-            self.showPopup()
+        metrics = QFontMetrics(option.font)
+        pill_width = min(option.rect.width() - 12, metrics.horizontalAdvance(str(text)) + 18)
+        pill_height = 24
+        pill_rect = QRect(
+            option.rect.center().x() - pill_width // 2,
+            option.rect.center().y() - pill_height // 2,
+            pill_width,
+            pill_height,
+        )
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(background)
+        painter.drawRoundedRect(pill_rect, pill_height / 2, pill_height / 2)
+        painter.setPen(foreground if isinstance(foreground, QColor) else option.palette.text().color())
+        painter.setFont(option.font)
+        painter.drawText(pill_rect, Qt.AlignCenter, str(text))
+        painter.restore()
+
+
+
+
 
 
 class CompactStatusLabel(QLabel):
@@ -292,6 +298,38 @@ class CompactStatusLabel(QLabel):
     def setText(self, text: str) -> None:
         super().setText(text)
         self.setToolTip(text)
+
+
+class WorkflowRailMark(QWidget):
+    """流程步骤编号和连接线共用一条视觉中轴。"""
+
+    def __init__(self, number: int, first: bool, last: bool, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.number = number
+        self.first = first
+        self.last = last
+        self.setObjectName("WorkflowRailMark")
+        self.setFixedSize(30, 42)
+        self.setAccessibleName(f"第 {number:02d} 步")
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        center_x = self.width() // 2
+        center_y = self.height() // 2
+        badge_radius = 13
+        painter.setPen(QPen(QColor("#d7dce2"), 1.5))
+        if not self.first:
+            painter.drawLine(QPoint(center_x, 0), QPoint(center_x, center_y - badge_radius))
+        if not self.last:
+            painter.drawLine(QPoint(center_x, center_y + badge_radius), QPoint(center_x, self.height()))
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QColor("#eef1f4"))
+        painter.drawEllipse(QPoint(center_x, center_y), badge_radius, badge_radius)
+        painter.setPen(QColor("#465365"))
+        painter.setFont(QFont("Microsoft YaHei UI", 9, QFont.DemiBold))
+        painter.drawText(self.rect(), Qt.AlignCenter, f"{self.number:02d}")
 
 
 class DownloadSummaryDialog(QDialog):
@@ -942,42 +980,6 @@ class MainWindow(QMainWindow):
         self._update_cookie_file_state()
         self._update_status()
 
-    def _create_platform_card(
-        self,
-        object_name: str,
-        icon_name: str,
-        title_text: str,
-        subtitle_text: str,
-    ) -> QFrame:
-        card = QFrame()
-        card.setObjectName(object_name)
-        card.setFixedHeight(54)
-
-        card_layout = QHBoxLayout(card)
-        card_layout.setContentsMargins(10, 7, 10, 7)
-        card_layout.setSpacing(10)
-
-        icon_label = QLabel()
-        icon_label.setObjectName("PlatformCardIcon")
-        icon_label.setFixedSize(27, 27)
-        icon_path = self.project_root / "app" / "assets" / "platforms" / icon_name
-        pixmap = QPixmap(str(icon_path))
-        icon_label.setPixmap(pixmap.scaled(25, 25, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        icon_label.setAlignment(Qt.AlignCenter)
-        card_layout.addWidget(icon_label)
-
-        text_layout = QVBoxLayout()
-        text_layout.setContentsMargins(0, 0, 0, 0)
-        text_layout.setSpacing(1)
-        title_label = QLabel(title_text)
-        title_label.setObjectName("PlatformCardTitle")
-        subtitle_label = QLabel(subtitle_text)
-        subtitle_label.setObjectName("PlatformCardSubtitle")
-        text_layout.addWidget(title_label)
-        text_layout.addWidget(subtitle_label)
-        card_layout.addLayout(text_layout, 1)
-        return card
-
     def _build_ui(self) -> None:
         root = QWidget()
         self.setCentralWidget(root)
@@ -987,10 +989,11 @@ class MainWindow(QMainWindow):
 
         sidebar = QFrame()
         sidebar.setObjectName("Sidebar")
+        self.sidebar = sidebar
         sidebar.setFixedWidth(220)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(20, 20, 20, 20)
-        sidebar_layout.setSpacing(16)
+        sidebar_layout.setSpacing(14)
 
         brand_mark = QLabel("南")
         brand_mark.setObjectName("BrandMark")
@@ -998,48 +1001,72 @@ class MainWindow(QMainWindow):
         brand_title.setObjectName("BrandTitle")
         brand_subtitle = QLabel("批量视频下载工作台")
         brand_subtitle.setObjectName("BrandSubtitle")
-        sidebar_layout.addWidget(brand_mark)
-        sidebar_layout.addWidget(brand_title)
-        sidebar_layout.addWidget(brand_subtitle)
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(10)
+        brand_text = QVBoxLayout()
+        brand_text.setSpacing(4)
+        brand_text.addWidget(brand_title)
+        brand_text.addWidget(brand_subtitle)
+        brand_subtitle.setWordWrap(True)
+        brand_row.addWidget(brand_mark, 0, Qt.AlignTop)
+        brand_row.addLayout(brand_text, 1)
+        sidebar_layout.addLayout(brand_row)
         sidebar_layout.addSpacing(10)
 
-        platform_title = QLabel("支持平台")
-        platform_title.setObjectName("SideSectionTitle")
-        sidebar_layout.addWidget(platform_title)
-
-        platform_cards_layout = QVBoxLayout()
-        platform_cards_layout.setContentsMargins(0, 0, 0, 0)
-        platform_cards_layout.setSpacing(8)
-        platform_specs = [
-            ("PlatformDouyin", "douyin.svg", "抖音", "作者 / 作品"),
-            ("PlatformYoutube", "youtube.svg", "YouTube", "频道 / 播放列表"),
-            ("PlatformBilibili", "bilibili.svg", "哔哩哔哩", "UP主 / 视频"),
-            ("PlatformXiaohongshu", "xiaohongshu.svg", "小红书", "作者 / 视频笔记"),
-            ("PlatformTiktok", "tiktok.svg", "TikTok", "作者 / 作品"),
-        ]
-        self.platform_cards = []
-        for object_name, icon_name, title_text, subtitle_text in platform_specs:
-            card = self._create_platform_card(object_name, icon_name, title_text, subtitle_text)
-            self.platform_cards.append(card)
-            platform_cards_layout.addWidget(card)
-        sidebar_layout.addLayout(platform_cards_layout)
-        sidebar_layout.addSpacing(8)
+        sidebar_layout.addSpacing(2)
 
         workflow_title = QLabel("操作流程")
         workflow_title.setObjectName("SideSectionTitle")
         sidebar_layout.addWidget(workflow_title)
-        for index, text in enumerate(["登录账号", "粘贴链接", "读取列表", "勾选下载"], start=1):
-            step_label = QLabel(f"{index:02d}  {text}")
-            step_label.setObjectName("WorkflowStep")
-            sidebar_layout.addWidget(step_label)
+        workflow_steps = QVBoxLayout()
+        workflow_steps.setSpacing(0)
+        self.workflow_step_rows = []
+        workflow_specs = [
+            ("登录账号", QStyle.SP_DirHomeIcon),
+            ("粘贴链接", QStyle.SP_FileIcon),
+            ("读取列表", QStyle.SP_FileDialogListView),
+            ("勾选下载", QStyle.SP_DialogApplyButton),
+        ]
+        for index, (text, icon_type) in enumerate(workflow_specs, start=1):
+            row = QWidget()
+            row.setObjectName("WorkflowStepRow")
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(9)
+
+            mark = WorkflowRailMark(index, index == 1, index == len(workflow_specs))
+            icon_label = QLabel()
+            icon_label.setObjectName("WorkflowActionIcon")
+            icon_label.setFixedSize(18, 18)
+            icon_pixmap = self.style().standardIcon(icon_type).pixmap(18, 18)
+            neutral_icon = QPixmap(icon_pixmap.size())
+            neutral_icon.fill(Qt.transparent)
+            icon_painter = QPainter(neutral_icon)
+            icon_painter.drawPixmap(0, 0, icon_pixmap)
+            icon_painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+            icon_painter.fillRect(neutral_icon.rect(), QColor("#526171"))
+            icon_painter.end()
+            icon_label.setPixmap(neutral_icon)
+            icon_label.setAlignment(Qt.AlignCenter)
+
+            step_label = QLabel(text)
+            step_label.setObjectName("WorkflowStepText")
+            row_layout.addWidget(mark)
+            row_layout.addWidget(icon_label)
+            row_layout.addWidget(step_label, 1)
+            workflow_steps.addWidget(row)
+            self.workflow_step_rows.append((row, mark, icon_label, step_label))
+        sidebar_layout.addLayout(workflow_steps)
         sidebar_layout.addStretch(1)
 
         self.settings_button = QPushButton("设置")
         self.settings_button.setObjectName("SettingsButton")
+        self.settings_button.setFixedHeight(36)
         self.settings_button.clicked.connect(self._open_settings)
         sidebar_layout.addWidget(self.settings_button)
         self.open_folder_button = QPushButton("打开保存目录")
         self.open_folder_button.setObjectName("SideButton")
+        self.open_folder_button.setFixedHeight(36)
         self.open_folder_button.clicked.connect(self._open_output_dir)
         sidebar_layout.addWidget(self.open_folder_button)
         shell.addWidget(sidebar)
@@ -1050,28 +1077,15 @@ class MainWindow(QMainWindow):
         layout.setSpacing(14)
         shell.addWidget(content, 1)
 
-        top_bar = QHBoxLayout()
-        title_block = QVBoxLayout()
-        title_block.setSpacing(4)
-        title = QLabel("下载控制台")
-        title.setObjectName("Title")
-        subtitle = QLabel("粘贴链接，读取作品列表，勾选后开始下载。")
-        subtitle.setObjectName("Subtitle")
-        title_block.addWidget(title)
-        title_block.addWidget(subtitle)
-        top_bar.addLayout(title_block)
-        top_bar.addStretch(1)
-        layout.addLayout(top_bar)
-
         input_frame = QFrame()
-        input_frame.setObjectName("Panel")
+        input_frame.setObjectName("InputGroups")
         input_layout = QGridLayout(input_frame)
-        input_layout.setContentsMargins(20, 18, 20, 18)
+        input_layout.setContentsMargins(0, 0, 0, 0)
         input_layout.setHorizontalSpacing(12)
         input_layout.setVerticalSpacing(12)
 
-        login_label = QLabel("登录")
-        login_label.setObjectName("FieldLabel")
+        login_label = QLabel("平台登录")
+        login_label.setObjectName("InputGroupTitle")
         self.login_douyin_button = QPushButton("抖音")
         self.login_douyin_button.setObjectName("LoginDouyinButton")
         self.login_douyin_button.setFixedWidth(150)
@@ -1103,15 +1117,11 @@ class MainWindow(QMainWindow):
             icon_path = self.project_root / "app" / "assets" / "platforms" / icon_name
             button.setIcon(QIcon(str(icon_path)))
             button.setIconSize(QSize(18, 18))
-        login_buttons_layout = QHBoxLayout()
+        login_buttons_layout = QGridLayout()
         login_buttons_layout.setContentsMargins(0, 0, 0, 0)
         login_buttons_layout.setSpacing(12)
-        login_buttons_layout.addWidget(self.login_douyin_button)
-        login_buttons_layout.addWidget(self.login_youtube_button)
-        login_buttons_layout.addWidget(self.login_bilibili_button)
-        login_buttons_layout.addWidget(self.login_xiaohongshu_button)
-        login_buttons_layout.addWidget(self.login_tiktok_button)
-        login_buttons_layout.addStretch(1)
+        for index, (button, _) in enumerate(login_icon_specs):
+            login_buttons_layout.addWidget(button, index, 0)
 
         output_label = QLabel("保存位置")
         output_label.setObjectName("FieldLabel")
@@ -1127,8 +1137,8 @@ class MainWindow(QMainWindow):
         self.quality_combo.setCurrentText("自动识别")
         self.quality_combo.setToolTip("自动选择源站可用的最佳画质，不转码；文件名按下载后校验的实际分辨率生成。")
 
-        url_label = QLabel("链接")
-        url_label.setObjectName("FieldLabel")
+        url_label = QLabel("视频链接")
+        url_label.setObjectName("InputGroupTitle")
         from .torrent_input import DownloadInput
         self.url_text = DownloadInput()
         self.url_text.setObjectName("DownloadInput")
@@ -1137,41 +1147,83 @@ class MainWindow(QMainWindow):
         self.url_text.setPlaceholderText(
             "粘贴平台链接、其他网站作品页或音视频直链，可一次多行；原有平台支持作者/频道列表，其他网站下载时解析单条媒体。支持拖入种子文件（.torrent）。"
         )
-        self.url_text.setFixedHeight(112)
+        self.url_text.setMinimumHeight(144)
 
         self.import_button = QPushButton("智能读取")
         self.import_button.setObjectName("SmartImportButton")
+        self.import_button.setFixedWidth(108)
         self.import_button.clicked.connect(self._smart_import)
         self.clear_url_button = QPushButton("清空链接")
         self.clear_url_button.setObjectName("ClearUrlButton")
+        self.clear_url_button.setFixedWidth(108)
         self.clear_url_button.clicked.connect(self._clear_url_input)
         url_button_panel = QFrame()
         url_button_panel.setObjectName("UrlButtonPanel")
-        url_button_layout = QVBoxLayout(url_button_panel)
+        url_button_layout = QHBoxLayout(url_button_panel)
         url_button_layout.setContentsMargins(0, 0, 0, 0)
         url_button_layout.setSpacing(10)
         url_button_layout.addStretch(1)
         url_button_layout.addWidget(self.import_button)
         url_button_layout.addWidget(self.clear_url_button)
-        url_button_layout.addStretch(1)
         self.paste_hint = QLabel(
             "公开单条视频通常无需登录；读取作者、频道或UP主的批量列表，以及访问受限内容时，平台可能要求登录。"
         )
         self.paste_hint.setObjectName("Hint")
+        self.paste_hint.setWordWrap(True)
 
-        input_layout.addWidget(login_label, 0, 0)
-        input_layout.addLayout(login_buttons_layout, 0, 1, 1, 5)
-        input_layout.addWidget(output_label, 1, 0)
-        input_layout.addWidget(self.output_edit, 1, 1, 1, 3)
-        input_layout.addWidget(self.output_button, 1, 4)
-        input_layout.addWidget(quality_label, 2, 0)
-        input_layout.addWidget(self.quality_combo, 2, 1)
-        input_layout.addWidget(url_label, 3, 0, Qt.AlignTop)
-        input_layout.addWidget(self.url_text, 3, 1, 1, 3)
-        input_layout.addWidget(url_button_panel, 3, 4, 1, 2)
-        input_layout.addWidget(self.paste_hint, 4, 1, 1, 5)
-        input_layout.setColumnStretch(1, 1)
-        input_layout.setColumnStretch(3, 1)
+        def input_card():
+            card = QFrame()
+            card.setObjectName("InputGroupCard")
+            body = QVBoxLayout(card)
+            body.setContentsMargins(18, 18, 18, 18)
+            body.setSpacing(16)
+            return card, body
+
+        login_card, login_body = input_card()
+        self.platform_login_card = login_card
+        login_card.setObjectName("SidebarLogin")
+        login_body.setContentsMargins(0, 0, 0, 0)
+        login_body.setSpacing(12)
+        login_label.setObjectName("SideSectionTitle")
+        login_body.addWidget(login_label)
+        login_body.addLayout(login_buttons_layout)
+        sidebar_layout.insertWidget(2, login_card)
+
+        links_card, links_body = input_card()
+        self.video_links_card = links_card
+        links_body.addWidget(url_label)
+        editor_surface = QFrame()
+        editor_surface.setObjectName("LinkEditorSurface")
+        editor_body = QVBoxLayout(editor_surface)
+        editor_body.setContentsMargins(0, 0, 12, 12)
+        editor_body.setSpacing(8)
+        editor_body.addWidget(self.url_text, 1)
+        editor_body.addWidget(url_button_panel)
+        links_body.addWidget(editor_surface, 1)
+        links_body.addWidget(self.paste_hint)
+
+        settings_card, settings_body = input_card()
+        self.download_settings_card = settings_card
+        settings_card.setFixedWidth(448)
+        settings_title = QLabel("下载设置")
+        settings_title.setObjectName("InputGroupTitle")
+        settings_body.addWidget(settings_title)
+        settings_body.addWidget(output_label)
+        output_row = QHBoxLayout()
+        output_row.setSpacing(8)
+        output_row.addWidget(self.output_edit, 1)
+        self.output_edit.setMinimumWidth(0)
+        self.output_button.setFixedWidth(88)
+        output_row.addWidget(self.output_button)
+        settings_body.addLayout(output_row)
+        settings_body.addSpacing(8)
+        settings_body.addWidget(quality_label)
+        settings_body.addWidget(self.quality_combo)
+        settings_body.addStretch(1)
+
+        input_layout.addWidget(links_card, 0, 0)
+        input_layout.addWidget(settings_card, 0, 1)
+        input_layout.setColumnStretch(0, 1)
         layout.addWidget(input_frame)
 
         action_frame = QFrame()
@@ -1205,15 +1257,20 @@ class MainWindow(QMainWindow):
         layout.addWidget(action_frame)
 
         self.table = QTableWidget(0, 12)
+        self.table.setObjectName("DownloadQueueTable")
         self.table.setHorizontalHeaderLabels(["序号", "选择", "状态", "平台", "博主", "分辨率", "标题 / 文件", "进度", "速度", "剩余", "链接", "定位"])
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(44)
+        self.table.setShowGrid(False)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.itemClicked.connect(self._on_table_item_clicked)
         self.table.viewport().installEventFilter(self)
         self.table.setItemDelegateForColumn(COL_SELECT, CenteredCheckBoxDelegate(self.table))
+        self.table.setItemDelegateForColumn(COL_STATUS, StatusPillDelegate(self.table))
         header = self.table.horizontalHeader()
         header.setDefaultAlignment(Qt.AlignCenter)
+        header.setFixedHeight(42)
         header.setSectionResizeMode(COL_INDEX, QHeaderView.Fixed)
         self.table.setColumnWidth(COL_INDEX, 54)
         header.setSectionResizeMode(COL_SELECT, QHeaderView.Fixed)
@@ -1236,7 +1293,13 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(COL_LINK, QHeaderView.Stretch)
         header.setSectionResizeMode(COL_LOCATE, QHeaderView.Fixed)
         self.table.setColumnWidth(COL_LOCATE, 76)
-        layout.addWidget(self.table, 1)
+        self.queue_card = QFrame()
+        self.queue_card.setObjectName("QueueCard")
+        queue_card_layout = QVBoxLayout(self.queue_card)
+        queue_card_layout.setContentsMargins(1, 1, 1, 1)
+        queue_card_layout.setSpacing(0)
+        queue_card_layout.addWidget(self.table)
+        layout.addWidget(self.queue_card, 1)
 
         bottom_bar = QHBoxLayout()
         self.status_label = CompactStatusLabel()
@@ -1344,58 +1407,6 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
                 font-weight: 700;
                 padding: 4px 2px;
-            }
-            QFrame#PlatformDouyin,
-            QFrame#PlatformYoutube,
-            QFrame#PlatformBilibili,
-            QFrame#PlatformXiaohongshu,
-            QFrame#PlatformTiktok {
-                border-radius: 8px;
-            }
-            QLabel#PlatformCardIcon,
-            QLabel#PlatformCardTitle,
-            QLabel#PlatformCardSubtitle {
-                background: transparent;
-                border: none;
-                padding: 0;
-            }
-            QLabel#PlatformCardTitle {
-                color: #1f2937;
-                font-size: 12px;
-                font-weight: 800;
-            }
-            QLabel#PlatformCardSubtitle {
-                color: #7c879c;
-                font-size: 10px;
-                font-weight: 600;
-            }
-            QFrame#PlatformDouyin {
-                background: #fff1f5;
-                border: 1px solid #ffd2df;
-            }
-            QFrame#PlatformYoutube {
-                background: #eef3ff;
-                border: 1px solid #d6dfff;
-            }
-            QFrame#PlatformBilibili {
-                background: #effaff;
-                border: 1px solid #cceef9;
-            }
-            QFrame#PlatformXiaohongshu {
-                background: #fff3f2;
-                border: 1px solid #ffd8d4;
-            }
-            QFrame#PlatformTiktok {
-                background: #f5f2ff;
-                border: 1px solid #e1d8ff;
-            }
-            QLabel#WorkflowStep {
-                background: #f8faff;
-                color: #566176;
-                border: 1px solid #e6ebf5;
-                border-radius: 8px;
-                padding: 9px 11px;
-                font-weight: 700;
             }
             QFrame#Panel {
                 background: #ffffff;
@@ -1666,44 +1677,6 @@ class MainWindow(QMainWindow):
                 color: #ffffff;
                 font-weight: 700;
             }
-            QPushButton#LoginDouyinButton,
-            QPushButton#LoginYoutubeButton,
-            QPushButton#LoginBilibiliButton,
-            QPushButton#LoginXiaohongshuButton,
-            QPushButton#LoginTikTokButton {
-                min-width: 120px;
-                max-width: 120px;
-            }
-            QPushButton#LoginDouyinButton {
-                background: #fff1f5;
-                border: 1px solid #ffd2df;
-                color: #dc3d65;
-                font-weight: 700;
-            }
-            QPushButton#LoginYoutubeButton {
-                background: #eef3ff;
-                border: 1px solid #d6dfff;
-                color: #3461ff;
-                font-weight: 700;
-            }
-            QPushButton#LoginBilibiliButton {
-                background: #effaff;
-                border: 1px solid #cceef9;
-                color: #1677a8;
-                font-weight: 700;
-            }
-            QPushButton#LoginXiaohongshuButton {
-                background: #fff3f2;
-                border: 1px solid #ffd6d2;
-                color: #e24a4a;
-                font-weight: 700;
-            }
-            QPushButton#LoginTikTokButton {
-                background: #f5f0ff;
-                border: 1px solid #dfd2ff;
-                color: #6d46c7;
-                font-weight: 700;
-            }
             QPushButton#ChooseButton {
                 background: #eefbf6;
                 border: 1px solid #c8f0df;
@@ -1805,19 +1778,22 @@ class MainWindow(QMainWindow):
             }
             QTableWidget {
                 background: #ffffff;
-                alternate-background-color: #f8faff;
-                border: 1px solid #e5eaf3;
-                border-radius: 8px;
-                gridline-color: #edf1f7;
-                selection-background-color: #eef3ff;
+                alternate-background-color: #fbfcfd;
+                border: none;
+                border-radius: 13px;
+                gridline-color: transparent;
+                selection-background-color: #edf3ff;
                 selection-color: #111827;
             }
+            QTableWidget::item {
+                border-bottom: 1px solid #f0f2f4;
+                padding: 4px 6px;
+            }
             QHeaderView::section {
-                background: #f3f6fb;
-                color: #4b5567;
-                padding: 10px 8px;
+                background: #f3f5f7;
+                color: #465365;
+                padding: 9px 8px;
                 border: none;
-                border-right: 1px solid #e5eaf3;
                 font-weight: 700;
             }
             QProgressBar {
@@ -1833,6 +1809,46 @@ class MainWindow(QMainWindow):
                 border-radius: 5px;
             }
             """
+        stylesheet += """
+            QFrame#Sidebar { background: #ffffff; border: none; border-radius: 14px; }
+            QLabel#BrandMark { background: #e6f6f0; color: #008c65; border: none; border-radius: 10px; }
+            QLabel#BrandTitle { font-size: 17px; color: #202939; }
+            QLabel#BrandSubtitle { font-size: 11px; color: #75818c; }
+            QLabel#SideSectionTitle { color: #75818c; font-weight: 600; }
+            QLabel#WorkflowStepText { background: transparent; color: #536371; font-weight: 500; }
+            QLabel#WorkflowActionIcon { background: transparent; }
+            QPushButton#SideButton { background: #5a9581; color: #ffffff; }
+            QPushButton#SideButton:hover { background: #4d8673; }
+            QPushButton#SideButton:pressed { background: #407663; }
+            QMainWindow { background: #eef0f3; }
+            QFrame#InputGroups, QFrame#UrlButtonPanel { background: transparent; border: none; }
+            QFrame#InputGroupCard { background: #ffffff; border: none; border-radius: 14px; }
+            QFrame#QueueCard { background: #ffffff; border: none; border-radius: 14px; }
+            QFrame#LinkEditorSurface { background: #f6f7f9; border: none; border-radius: 8px; }
+            QLabel#InputGroupTitle { font-size: 17px; font-weight: 700; color: #202939; }
+            QFrame#InputGroupCard QLineEdit,
+            QFrame#InputGroupCard QComboBox,
+            QFrame#InputGroupCard QPlainTextEdit,
+            QFrame#InputGroupCard QWidget#DownloadInputViewport {
+                background: #f6f7f9;
+                border: none;
+            }
+            QFrame#InputGroupCard QComboBox::drop-down { background: #f6f7f9; border: none; }
+            QPushButton#LoginDouyinButton, QPushButton#LoginYoutubeButton,
+            QPushButton#LoginBilibiliButton, QPushButton#LoginXiaohongshuButton,
+            QPushButton#LoginTikTokButton {
+                background: #f1f3f5; color: #202939; font-weight: 600;
+            }
+            QPushButton#ChooseButton {
+                background: #f6f7f9; color: #364153; min-width: 0; padding-left: 12px; padding-right: 12px;
+            }
+            QPushButton#ClearUrlButton { background: #fff0e4; color: #a85c24; }
+            QPushButton#ClearUrlButton:hover { background: #ffe7d4; color: #984d19; }
+            QPushButton#ClearUrlButton:pressed { background: #ffdcc1; color: #884312; }
+            QPushButton#SmartImportButton { background: #5a9581; color: #ffffff; }
+            QPushButton#SmartImportButton:hover { background: #4d8673; }
+            QPushButton#SmartImportButton:pressed { background: #407663; }
+        """
         self.setStyleSheet(button_feedback_stylesheet(stylesheet.replace("__CHEVRON_ICON__", chevron_icon)))
 
     def _update_status(self) -> None:
@@ -3110,10 +3126,19 @@ def main() -> int:
             migration_message = f"已加密迁移 {migrated} 份历史登录 Cookie。"
     except RuntimeError as exc:
         migration_message = f"登录 Cookie 未能完成加密迁移：{exc}"
-    window = MainWindow()
+    qa_root = os.environ.get("NANFENG_DOWNLOADER_QA_ROOT")
+    settings = None
+    if qa_root:
+        root = Path(qa_root).resolve()
+        root.mkdir(parents=True, exist_ok=True)
+        settings = QSettings(str(root / "preferences.ini"), QSettings.IniFormat)
+    window = MainWindow(settings=settings)
     window.show()
     if migration_message:
         window.status_label.setText(migration_message)
+    if qa_root and os.environ.get("NANFENG_DOWNLOADER_QA_PREVIEW") == "1":
+        from .qa_preview import capture_release_preview
+        QTimer.singleShot(600, lambda: capture_release_preview(window, Path(qa_root)))
     return app.exec()
 
 

@@ -257,7 +257,9 @@ def discover_bilibili_items(url: str, options: Any, max_items: int = 500) -> lis
         "skip_download": True,
         "quiet": True,
         "ignoreerrors": False,
-        "noplaylist": False,
+        # A BV page without p intentionally offers all parts. An explicit p or
+        # episode is one selected work and must not expand a collection.
+        "noplaylist": bool(single_video and (parse_qs(urlparse(url).query).get("p") or "/bangumi/play/" in urlparse(url).path)),
         "playlistend": max_items,
     }
     if options.ffmpeg_dir:

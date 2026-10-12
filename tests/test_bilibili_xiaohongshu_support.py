@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from tests.ui_fixtures import isolated_main_window
+
 import unittest
 import os
 from pathlib import Path
@@ -53,14 +55,14 @@ class PlatformInputTests(unittest.TestCase):
 
 
 class PlatformLoginLayoutTests(unittest.TestCase):
-    def test_platform_login_buttons_keep_the_original_row_width(self) -> None:
+    def test_platform_login_buttons_use_sidebar_column_and_keep_path_width(self) -> None:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
 
         from app.main import MainWindow
 
         app = QApplication.instance() or QApplication([])
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.resize(1820, 1130)
             window.show()
@@ -78,10 +80,11 @@ class PlatformLoginLayoutTests(unittest.TestCase):
             )
             self.assertIn(window.login_youtube_button.text(), {"YouTube", "YouTube（已连接）"})
             self.assertEqual([button.width() for button in buttons], [150, 150, 150, 150, 150])
-            self.assertEqual(len({button.geometry().y() for button in buttons}), 1)
-            self.assertEqual(window.output_edit.width(), window.url_text.width())
-            self.assertEqual(window.clear_url_button.geometry().x(), window.import_button.geometry().x())
-            self.assertGreater(window.clear_url_button.geometry().y(), window.import_button.geometry().y())
+            self.assertEqual(len({button.geometry().x() for button in buttons}), 1)
+            self.assertTrue(all(window.sidebar.isAncestorOf(button) for button in buttons))
+            self.assertGreaterEqual(window.output_edit.width(), 320)
+            self.assertGreater(window.clear_url_button.geometry().x(), window.import_button.geometry().x())
+            self.assertEqual(window.clear_url_button.geometry().y(), window.import_button.geometry().y())
             self.assertEqual(window.clear_url_button.width(), window.import_button.width())
             self.assertGreater(
                 window.output_edit.width(),
@@ -99,7 +102,7 @@ class PlatformLoginLayoutTests(unittest.TestCase):
         from app.main import MainWindow
 
         app = QApplication.instance() or QApplication([])
-        window = MainWindow()
+        window = isolated_main_window()
         try:
             window.url_text.setPlainText("https://example.test/video")
             window._add_queue_row(

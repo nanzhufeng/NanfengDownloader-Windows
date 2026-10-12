@@ -1,47 +1,57 @@
 # 南枫下载 Windows 项目状态
 
 ## Verified
-- Last verified: 2026-10-12 14:29 +08:00
+- Last verified: 2026-10-12 19:04 +08:00
 - Branch: main
-- Code baseline: c90908f680e79fb9e813025364e8ba4c113162d4（安装包代码基线）；发布资料随后收尾，最终版本基线以 v2026.10.12-windows 标签为准。
+- Code baseline: 当前源码准备发布为 v2026.10.12.1-windows；冻结产物与版本信息已一致，最终提交以该标签为准。
 - Verified by: Codex
 - Status: Active
-- Scope: Windows v2026.10.12 源码、原生控件、冻结 EXE、Inno Setup 安装器与隔离安装验收。
+- Scope: Windows v2026.10.12.1 源码、204 项测试、冻结 EXE、Inno Setup 7 安装包；本版安装／卸载未执行。
 
 ## Current
 - 链接快捷键粘贴替换，列表历史记录可选保存。
-- 双列灰底设置卡片；共享按钮外边界反馈，没有内部第二层方框。
-- 非编辑下拉控件保留文字居中、再次点击关闭；使用 Fusion 控件主题规避 Windows 编辑型弹层差异。
+- 本地界面修改：平台登录移入左侧品牌下方原支持平台位置，单列灰底胶囊；主区保留视频链接和下载设置两张卡片，侧栏流程为编号圆点、连接线和图标。
+- 列表改为白色圆角卡片、浅灰表头和细行分隔，状态用圆角色标区分；链接输入区的智能读取与清空链接位于右下角，原占位说明和提示说明保留。
+- 平台入口采用统一浅灰底；智能读取和打开保存目录改为低饱和青绿色，清空链接使用浅橙底；按钮不画线框，单行操作保持圆角胶囊，“选择”保留小圆角矩形。
+- 下拉控件在完整单击释放后再展开，重复点击可关闭；弹层默认位于选框下方 8px，空间不足时收缩或避让。
+- 读取结果入表性能：关闭的下拉控件不再安装应用级事件过滤器，仅打开弹层时监听捕获的点击。前次隔离离线 500 行入表由 65.29 秒降为 0.598 秒；下述本轮另外修复平台解析。
+- 后续网络读取修复：抖音明确作品快速入队，短链只解析跳转身份，媒体与完整元数据下载时解析；作者 ID 分源提取，合法尾页停止 API／浏览器采集，失效短链不猜首页推荐。
+- 公开短链 fnbl_eklrjM 实测：修复前 4.440 秒；修复后三次 0.523／0.099／0.129 秒；原生按钮→后台线程→入队约 0.187 秒（匿名公开访问）。作者列表使用受控响应回归，未补造公网作者完整性证据。
+- 主窗、设置和选集的下拉均复用 combo_box 与 combo_popup；纯白圆角、透明软阴影、行内淡色反馈与选中勾选；没有原生黑边与硬投影。下拉组件及表面按需创建。
+- 当前合同统一入口为 docs/contracts.md；专项规则、用户 README、接手文档与旧布局测试已同步。Windows 构建／Release 不附哈希；构建核对源码关于版本与发行版本一致。
 - 当前源码 BAT：仓库根目录 `启动南枫下载.bat`。
 
 ## In Progress
-- 本轮代码、安装器验收和远端下载回验已完成。公开状态以 [GitHub Release](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.12-windows) 的实时结果为准。
+- v2026.10.12.1 已完成本地构建与冻结启动验收，准备提交 main、上传正式 Release。
 
 ## Blocked
-- 无。用户于 2026-10-12 将 Windows 默认发布方式改为未签名安装包；Android、macOS 规则不受此变更影响。
+- 安装／卸载验收命令被自动批准审查拒绝，仅返回 blocked by policy；未执行该命令。发布继续按已完成验证如实标明边界。
 
 ## Tests
 | 验证层 | 结果 | 范围 / 证据 |
 |---|---|---|
-| Core tests | PASS | 183 项完整测试；build-release-20261012.log（本地忽略日志） |
+| Core tests (发布基线) | PASS | 183 项完整测试；build-release-20261012.log（本地忽略日志） |
+| 当前源码 | PASS | 204 项完整 unittest（Windows，15.231 秒）；compileall、限定 diff 检查与活动文档链接校验通过 |
+| 当前原生读取／弹层 | PASS | 提供的公开抖音短链、实际按钮与线程入队；浅／深背景透明软边、五项全可见、重复开关／Esc／键盘选择；路径框宽 356px |
 | Windows UI | PASS | 原生 Windows 模式下拉重复开关、Esc、选择与点击回传；按钮内部无新增方框；设置开关与取消 |
-| Build | PASS | PyInstaller 终态 EXE；Inno Setup 7 x64 安装包 |
-| Installer | PASS | 独立目录安装、真实窗口标题及响应、aria2/FFmpeg/Node、卸载退出 0；原快捷方式保留 |
-| Signature | NOT SIGNED | Get-AuthenticodeSignature；安装包 157112270 字节 |
-| Remote asset | PASS | 唯一 Setup EXE；uploaded；157112270 字节；从 GitHub 下载与本地文件一致 |
+| 当前 Build／启动 | PASS | PyInstaller EXE 与 Inno Setup 7 x64；隔离配置、冻结窗口响应、随包工具通过 |
+| 当前 Installer | NOT RUN | 验收命令被自动审查拒绝；上版安装证据不代表本版已安装 |
+| 当前 Signature | NOT SIGNED | Get-AuthenticodeSignature；安装包 157127469 字节 |
+| 当前 Remote asset | PENDING | 待上传并从 GitHub 下载回验 |
 
 ## Gaps
 - 本轮未重新验收外部平台真实下载；磁力链接和 BT 公网下载仍未完成真实验收。
+- 性能证据覆盖本地入表和所给公开抖音单作品；B站、小红书、TikTok 本轮是实现检查和自动回归，不冒称完成全平台公网性能验收。物理多 DPI／高对比与读屏仍待目标环境验证。
 - Windows 安装包验签为 NotSigned，按用户的新默认规则发布；不声明正式签名。
 
 ## Sync & Safety
-- Observed at: 2026-10-12 14:29 +08:00
-- Docs: OK（README 当前截图、版本说明、状态摘要）
-- Git: DIRTY（仅本次发布资料收尾；功能代码已提交，最终同步结果以版本标签为准）
-- Remote: PUSHED（代码基线 c90908f 已推送 main；本次文档收尾将随 v2026.10.12-windows 标签同步）
+- Observed at: 2026-10-12 19:04 +08:00
+- Docs: 当前合同已统一；README 三张图已更新为本版冻结 EXE 实际界面。
+- Git: 本轮修改准备提交 main；GitHub 发布状态以终态验收更新为准。
+- Remote: 待发布 v2026.10.12.1。
 - Rollback point: 1e36a7771357836f1ebfe68155804c12f79a2611（此前已发布的 v2026.09.15-windows）
 - Secrets/config risk: NONE（app/scripts/packaging/docs/tests 的典型真实凭据模式未命中；预览已脱敏；设计会话目录不提交）
 
 ## Next
-1. 从 GitHub Release 下载本版使用；当前源码入口为根目录 BAT。
+1. 完成 v2026.10.12.1 的 main 提交、正式 Release 和远端下载回验。
 2. 后续按单独授权进行外部平台真实下载及 BT 公网验收。
