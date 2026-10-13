@@ -72,8 +72,8 @@ from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.12.1"
-APP_DEVELOPED_AT = "2026-10-12 18:43"
+APP_VERSION = "v2026.10.13"
+APP_DEVELOPED_AT = "2026-10-13 22:35"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -212,7 +212,17 @@ def is_network_error_text(text: str) -> bool:
     return any(keyword in lowered for keyword in NETWORK_ERROR_KEYWORDS)
 
 
-class CenteredCheckBoxDelegate(QStyledItemDelegate):
+class SingleLineItemDelegate(QStyledItemDelegate):
+    """仅规范列表绘制，原始标题、链接和悬浮提示保持完整。"""
+
+    def initStyleOption(self, option, index) -> None:
+        super().initStyleOption(option, index)
+        option.features &= ~option.ViewItemFeature.WrapText
+        option.textElideMode = Qt.ElideRight
+        option.text = re.sub(r"[\r\n\u2028\u2029]+", " ", option.text)
+
+
+class CenteredCheckBoxDelegate(SingleLineItemDelegate):
     @staticmethod
     def _check_state_value(check_state: Any) -> int:
         return int(getattr(check_state, "value", check_state))
@@ -247,7 +257,7 @@ class CenteredCheckBoxDelegate(QStyledItemDelegate):
         style.drawPrimitive(QStyle.PE_IndicatorItemViewItemCheck, checkbox_option, painter, option.widget)
 
 
-class StatusPillDelegate(QStyledItemDelegate):
+class StatusPillDelegate(SingleLineItemDelegate):
     """用轻色胶囊区分队列状态，避免把整张表格单元染色。"""
 
     def paint(self, painter, option, index) -> None:
@@ -279,7 +289,7 @@ class StatusPillDelegate(QStyledItemDelegate):
         painter.drawRoundedRect(pill_rect, pill_height / 2, pill_height / 2)
         painter.setPen(foreground if isinstance(foreground, QColor) else option.palette.text().color())
         painter.setFont(option.font)
-        painter.drawText(pill_rect, Qt.AlignCenter, str(text))
+        painter.drawText(pill_rect, Qt.AlignCenter | Qt.TextSingleLine, str(text))
         painter.restore()
 
 
@@ -1262,6 +1272,9 @@ class MainWindow(QMainWindow):
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(44)
         self.table.setShowGrid(False)
+        self.table.setWordWrap(False)
+        self.table.setTextElideMode(Qt.ElideRight)
+        self.table.setItemDelegate(SingleLineItemDelegate(self.table))
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.itemClicked.connect(self._on_table_item_clicked)

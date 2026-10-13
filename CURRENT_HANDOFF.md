@@ -1,24 +1,24 @@
 # 当前交接
 
-2026-10-12 19:18 +08:00；D:\CodexProjects\NanfengDownloader-Windows。
+2026-10-13 22:40 +08:00；D:\CodexProjects\NanfengDownloader-Windows。
 
-用户已授权“打包上传 GitHub”。已发布正式 Windows 修订版 v2026.10.12.1-windows，默认未签名、Release 不附 SHA-256，附件只放 Setup EXE。
+用户已授权“打包上传 GitHub”。本轮 v2026.10.13 修复列表单行显示并更新真实预览、版本及发布资料。
 
-## 终态本地证据
+## 已完成
 
-- 冻结安装包：D:\ReleaseUpload\NanfengDownloader\NanfengDownloader-Windows-v2026.10.12.1-Setup.exe；157127469 字节，NotSigned；不再重新生成该文件。
-- 204 项完整测试（15.231 秒）；PyInstaller 与 Inno Setup 7 成功；隔离配置、冻结窗口响应、aria2／FFmpeg／Node 均通过。
-- 当前 EXE 生成了三个脱敏真实运行页面；README 已更新。真实主窗样式下最后选项裁切在本轮发布 QA 发现并修复；新增回归后重建，最终截图五项全可见。
-- scripts/verify_windows_startup.ps1 为 UTF-8 BOM，兼容 PowerShell 5；隐藏窗口用本次进程 HWND／WM_NULL 检查响应，配置与登录数据独立临时目录。
-- 安装／卸载验收命令被自动批准审查拒绝，只返回 blocked by policy。未执行、不绕过；不能以旧版安装证明本版已安装。
-- docs/verification/windows-installer-release-20261012-1.md 是本版证据；旧智能读取与合同审计保留原日期。
+- QTableWidget 关闭自动换行，统一 SingleLineItemDelegate 末尾省略；显式换行仅在绘制时合并，原始任务数据、完整悬浮提示及历史恢复不变。
+- 新增 test_queue_single_line；205 项完整测试通过（28.905 秒），compileall 与限定 diff 检查通过；Windows 原生单行绘制另验通过。
+- 固定 build／dist 缓存构建成功；PyInstaller 冻结窗口、独立临时配置、原生 WM_NULL 响应及随包工具均通过。
+- 安装包已冻结：D:\ReleaseUpload\NanfengDownloader\NanfengDownloader-Windows-v2026.10.13-Setup.exe，157130748 字节；程序与安装包 NotSigned。
+- README 三张图来自当前冻结 EXE；脱敏合成行，长标题单行省略，没有启动下载；发布结构合同 14 项通过。
+- 本版证据：docs/verification/windows-installer-release-20261013.md。旧 v2026.10.12.1 冻结文件及验收文档不覆盖。
 
-## 发布终态
+## 待完成
 
-- main 与独立标签已同步；代码基线 09a36af49c6d2de09a84c2dca16ff5bcc05fb233，后续只有发布资料收尾。
-- https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.12.1-windows；draft=false、prerelease=false，发布于 19:18:31 +08:00。
-- 唯一 Setup EXE 为 uploaded，157127469 字节；远端重新下载与本地冻结文件一致。
-- 残留清理命令也被自动审查拒绝；本轮中断编译的 110653444 字节临时文件留在 D:\ReleaseUpload\NanfengDownloader\work\2026.10.12.1-1198331e1d8846bca3818b4c8739e30d。勿把该部分文件当正式产物。
-- 不再运行构建／重签名；用户后续另行反馈或新版本请求再启动下一工作。
+1. 提交 main，创建准确提交的 v2026.10.13-windows 标签并同步。
+2. 正式 Release 只上传一个 Setup EXE，不加展示图片或 SHA-256。
+3. 读取 Release 元数据并重新下载附件，内部核对文件一致性后更新状态与交接。
 
-原运行窗口不会热加载更新；当前源码入口为 启动南枫下载.bat。未覆盖现用安装目录，也未清理用户下载／登录数据。外部平台实际媒体下载、BT 公网、多 DPI／读屏仍未重新验收。
+本版安装／卸载未重新运行：前次同类命令被自动批准审查拒绝，本轮不换调用方式绕过，也不把前版证据算作本版。外部平台实际媒体下载、BT 公网、多 DPI／读屏仍未重新验收。旧中断编译残留见前版验收记录，本轮未删除。
+
+当前源码入口：启动南枫下载.bat。未覆盖用户现用安装目录，未清理下载／登录数据；冻结文件不再重新生成。

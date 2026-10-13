@@ -9,7 +9,7 @@ def capture_release_preview(window, root):
     window.resize(1820, 1000)
     window.output_edit.setText('D:\\南枫下载')
     window.url_text.setPlainText('https://www.youtube.com/watch?v=preview-demo\nhttps://www.douyin.com/video/1234567890123456789')
-    window._add_queue_row('https://www.youtube.com/watch?v=preview-demo', 'YouTube', '示例视频 · 城市慢行', creator_name='示例频道')
+    window._add_queue_row('https://www.youtube.com/watch?v=preview-demo', 'YouTube', '示例视频 · 城市慢行与公共空间记录\n沿河步道、街区更新与日常生活观察 1080p.mp4', creator_name='示例频道')
     window._add_queue_row('https://www.douyin.com/video/1234567890123456789', '抖音', '示例作品 · 旅行片段', creator_name='示例作者')
     window._set_status_cell(0, '完成')
     window._set_cell(0, COL_PROGRESS, '100%')
