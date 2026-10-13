@@ -1,9 +1,9 @@
 # 南枫下载 Windows 项目状态
 
 ## Verified
-- Last verified: 2026-10-13 22:40 +08:00
+- Last verified: 2026-10-13 22:59 +08:00
 - Branch: main
-- Code baseline: 当前源码对应冻结 Windows v2026.10.13；准备同步 main 并创建独立 v2026.10.13-windows 标签。
+- Code baseline: edd8148321ce4b3f8e27d6143cae8bc392726909；v2026.10.13-windows 标签与冻结源码一致，main 后续仅发布记录收尾。
 - Verified by: Codex
 - Status: Active
 - Scope: Windows v2026.10.13 源码、205 项完整测试、冻结 EXE、Inno Setup 7 安装包与真实预览；本版安装／卸载未执行。
@@ -23,7 +23,7 @@
 - 当前源码 BAT：仓库根目录 `启动南枫下载.bat`。
 
 ## In Progress
-- v2026.10.13 已冻结；正在提交源码、上传唯一 Setup EXE，待远端下载回验。
+- 无进行中的发布动作；v2026.10.13 已正式公开，唯一 Setup EXE 已完成远端下载回验。
 
 ## Blocked
 - 本版安装／卸载未重新运行。前次同类验收命令被自动批准审查拒绝（blocked by policy）；未换调用方式绕过，也未沿用前版安装结论。
@@ -31,30 +31,28 @@
 ## Tests
 | 验证层 | 结果 | 范围 / 证据 |
 |---|---|---|
-| Core tests (发布基线) | PASS | 183 项完整测试；build-release-20261012.log（本地忽略日志） |
-| 已发布源码 | PASS | 204 项完整 unittest（Windows，15.231 秒）；compileall、限定 diff 检查与活动文档链接校验通过 |
 | 当前源码 | PASS | 205 项完整 unittest（28.905 秒）；compileall、限定 diff 检查通过；单行列表 Windows 原生绘制另验通过 |
-| 当前原生读取／弹层 | PASS | 提供的公开抖音短链、实际按钮与线程入队；浅／深背景透明软边、五项全可见、重复开关／Esc／键盘选择；路径框宽 356px |
+| 原生读取（2026-10-12）／当前弹层 | PASS | 前次公开抖音短链、实际按钮与线程入队；本轮冻结截图五项全可见，重复开关／Esc／键盘选择回归通过 |
 | Windows UI | PASS | 原生 Windows 模式下拉重复开关、Esc、选择与点击回传；按钮内部无新增方框；设置开关与取消 |
 | 当前 Build／启动 | PASS | PyInstaller EXE 与 Inno Setup 7 x64；隔离配置、冻结窗口响应、随包工具与真实截图通过；发布结构合同 14 项通过 |
 | 当前 Installer | NOT RUN | 前次同类验收被自动审查拒绝，本轮未绕过；冻结启动不代表安装通过 |
 | 当前 Signature | NOT SIGNED | Get-AuthenticodeSignature；安装包 157130748 字节，版本 2026.10.13 |
-| 当前 Remote asset | PENDING | 待正式 Release 上传与重新下载回验；本版证据见 verification/windows-installer-release-20261013.md |
+| 当前 Remote asset | PASS | 最新正式 Release；唯一 Setup EXE、uploaded、157130748 字节；重新下载与冻结收据及本地文件一致。本版证据见 verification/windows-installer-release-20261013.md |
 
 ## Gaps
 - 本轮未重新验收外部平台真实下载；磁力链接和 BT 公网下载仍未完成真实验收。
 - 性能证据覆盖本地入表和所给公开抖音单作品；B站、小红书、TikTok 本轮是实现检查和自动回归，不冒称完成全平台公网性能验收。物理多 DPI／高对比与读屏仍待目标环境验证。
 - Windows 安装包验签为 NotSigned，按用户的新默认规则发布；不声明正式签名。
-- 中断编译的 110653444 字节临时残留回收也被自动审查拒绝，位置与证据见本版交付验收文档。
+- 前版中断编译的 110653444 字节临时残留回收被自动审查拒绝，本轮未删除；位置与证据见 verification/windows-installer-release-20261012-1.md。
 
 ## Sync & Safety
-- Observed at: 2026-10-13 22:40 +08:00
+- Observed at: 2026-10-13 22:59 +08:00
 - Docs: 当前合同已统一；README 三张图已更新为 v2026.10.13 冻结 EXE 实际界面。
-- Git: 准备同步 main 与 v2026.10.13-windows 标签；冻结文件不再生成。
-- Remote: v2026.10.13 待上传；v2026.10.12.1 保留其历史证据。
+- Git: main 与独立 v2026.10.13-windows 标签已同步；最后仅收尾发布记录，冻结文件不再生成。
+- Remote: v2026.10.13 已为最新正式 Release；22:58:26 发布，22:59 远端重新下载回验通过。
 - Rollback point: 1e36a7771357836f1ebfe68155804c12f79a2611（此前已发布的 v2026.09.15-windows）
 - Secrets/config risk: NONE（app/scripts/packaging/docs/tests 的典型真实凭据模式未命中；预览已脱敏；设计会话目录不提交）
 
 ## Next
-1. 上传 v2026.10.13 安装包并完成远端回验；当前源码可用根目录 BAT 启动。
+1. 从 GitHub 下载 v2026.10.13，或用根目录 BAT 启动当前源码；本轮无需继续构建／上传。
 2. 后续按单独授权进行外部平台真实下载及 BT 公网验收。

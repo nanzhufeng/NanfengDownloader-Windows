@@ -12,7 +12,8 @@
 - 发布结构合同：14 项通过，0 项失败；唯一交付附件为平台命名 Setup EXE。
 - 签名：程序和安装包均为 NotSigned，按 Windows 默认未签名规则发布。
 - 安装／卸载：本版 NOT RUN。前次同类验收命令被自动批准审查拦截；本轮未换调用方式绕过，也不把前版或冻结启动结果算作本版安装验收。
-- 源码标签：v2026.10.13-windows，发布后核对准确提交。
-- GitHub：待上传及远端回验；完成后更新本项。
+- 源码标签：v2026.10.13-windows，准确指向 edd8148321ce4b3f8e27d6143cae8bc392726909；main 后续仅更新发布终态记录。
+- GitHub：正式 Release 于 2026-10-13 22:58:26 +08:00 发布，draft=false、prerelease=false，已为 latest；唯一 Setup EXE 为 uploaded，157130748 字节。22:59 重新下载，与最初冻结收据及当前本地文件完全一致，下载文件仍为 NotSigned、版本 2026.10.13。
+- 下载：[v2026.10.13-windows](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.13-windows)；Release 只附 Setup EXE，未加入展示图或 SHA-256。
 
 不覆盖用户现用安装目录，不清理用户下载／登录数据。实际外部平台下载、BT 公网、多 DPI 与读屏仍待验收；未重新生成旧版本冻结安装包。
