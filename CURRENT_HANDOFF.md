@@ -6,6 +6,6 @@ v2026.10.16.1 安装修复已本地构建并由用户实际安装：窗口可见
 
 208 项完整 unittest 通过（18.931 秒）。详细证据 docs/verification/installer-repair-20261016.md。本地包 D:\ReleaseUpload\NanfengDownloader\NanfengDownloader-Windows-v2026.10.16.1-Setup.exe，157116543 字节，NotSigned，不重建覆盖。
 
-发布耗时主要来自本机上行、线路切换和 EOF 重传；统一构建脚本记录阶段用时，默认复用固定缓存。新 GitHub 流程默认只构建候选包，需实际云运行验证后才能称通过；入口 scripts/publish_windows_release.ps1，发布准备.bat 仅输出只读计划。v2026.10.16.1 尚未公开发布，既有 v2026.10.16-windows 正式资产不覆盖。
+发布耗时主要来自本机上行、线路切换和 EOF 重传；统一构建脚本记录阶段用时，默认复用固定缓存。新 GitHub 流程默认只构建候选包，云验证已通过（38846891113，源码 20f2a156cd128a65093a74cc20abf3c359430b89，208 测试 20.824 秒，整个运行 6 分 20 秒）；入口 scripts/publish_windows_release.ps1，发布准备.bat 仅输出只读计划。v2026.10.16.1 尚未公开发布，既有 v2026.10.16-windows 正式资产不覆盖。
 
 长期默认规则正文已更新本地产品标准 Skill，记忆说明待系统应用。当前启动入口：启动南枫下载.bat。本修复版卸载、外部平台真实下载未重验。
