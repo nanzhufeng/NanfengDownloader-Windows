@@ -4,6 +4,8 @@ import importlib.util
 import sys
 import unittest
 import tempfile
+import subprocess
+import json
 from pathlib import Path
 
 
@@ -21,6 +23,15 @@ release_metadata = _load_release_metadata_module()
 
 
 class ReleaseMetadataTests(unittest.TestCase):
+    def test_current_source_cli_reads_version_without_executing_app(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'main.py'
+            source.write_text('APP_VERSION = "v2026.10.16.1"\nraise AssertionError("must not import")\n', encoding='utf-8')
+            result = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / 'scripts/release_metadata.py'), '--from-source', str(source)], capture_output=True, check=True, text=True, encoding='utf-8')
+            metadata = json.loads(result.stdout)
+            self.assertEqual(metadata['tag'], 'v2026.10.16.1-windows')
+            self.assertEqual(metadata['version_info'], '2026.10.16.1')
+
     def test_source_about_version_must_match_requested_installer_version(self) -> None:
         metadata = release_metadata.release_metadata('2026.10.12')
         with tempfile.TemporaryDirectory() as directory:

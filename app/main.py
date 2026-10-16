@@ -51,7 +51,6 @@ from .auth_profile import (
     has_youtube_account_cookies,
     launch_login_browser,
     migrate_legacy_cookie_files,
-    migrate_legacy_browser_profile_cookies,
     open_login_browser,
 )
 from .catalog import CatalogItem, discover_links
@@ -72,8 +71,8 @@ from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.16"
-APP_DEVELOPED_AT = "2026-10-16 09:32"
+APP_VERSION = "v2026.10.16.1"
+APP_DEVELOPED_AT = "2026-10-16 11:20"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -3168,7 +3167,8 @@ def main() -> int:
     try:
         cleanup_runtime_cookie_exports()
         migrated = migrate_legacy_cookie_files()
-        migrated += migrate_legacy_browser_profile_cookies()
+        # Browser-profile recovery is lazy in the download/login paths. Starting
+        # Playwright here can leave an invisible process if a profile is locked.
         if migrated:
             migration_message = f"已加密迁移 {migrated} 份历史登录 Cookie。"
     except RuntimeError as exc:

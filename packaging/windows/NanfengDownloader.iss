@@ -36,16 +36,23 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
+UsePreviousTasks=no
+ShowLanguageDialog=no
+UsePreviousLanguage=no
 VersionInfoVersion={#MyVersionInfo}
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Windows 安装程序
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
 
+[Languages]
+Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："; Flags: unchecked
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："
 
 [Files]
+Source: "close_running_app.ps1"; Flags: dontcopy
 Source: "{#MyAppSourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [InstallDelete]
@@ -59,3 +66,22 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ExitCode: Integer;
+  Arguments: String;
+begin
+  Result := '';
+  WizardForm.StatusLabel.Caption := '正在关闭旧版程序及后台组件，请稍候……';
+  ExtractTemporaryFile('close_running_app.ps1');
+  Arguments := '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' +
+    ExpandConstant('{tmp}\close_running_app.ps1') + '" -InstallDirectory "' +
+    ExpandConstant('{app}') + '" -Apply';
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+    Arguments, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) then
+    Result := '无法启动旧版程序清理，请关闭南枫下载后重试。'
+  else if ExitCode <> 0 then
+    Result := '旧版程序仍在占用文件，请关闭南枫下载后重试；不会强制覆盖正在使用的文件。';
+end;

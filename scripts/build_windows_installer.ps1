@@ -1,6 +1,8 @@
 ﻿[CmdletBinding()]
 param(
     [string]$Version,
+    [string]$ReleaseDirectory = 'D:\ReleaseUpload\NanfengDownloader',
+    [switch]$CleanRebuild,
     [switch]$SkipTests,
     [switch]$CheckCompilerOnly
 )
@@ -9,7 +11,9 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $isccCandidates = @(
     (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 7\ISCC.exe"),
-    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe")
+    (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
+    (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 7\ISCC.exe"),
+    (Join-Path $env:ProgramFiles "Inno Setup 7\ISCC.exe")
 )
 $iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 
@@ -19,6 +23,8 @@ if (-not $iscc) {
 
 Push-Location $projectRoot
 $originalPath = $env:PATH
+$totalClock = [Diagnostics.Stopwatch]::StartNew()
+$timings = [ordered]@{}
 try {
     Write-Output "Inno compiler: $iscc"
     if ($CheckCompilerOnly) {
@@ -39,17 +45,19 @@ try {
         throw "Release version is invalid."
     }
 
-    $releaseDirectory = 'D:\ReleaseUpload\NanfengDownloader'
+    $releaseDirectory = [IO.Path]::GetFullPath($ReleaseDirectory)
     $releaseInstaller = Join-Path $releaseDirectory $metadata.installer_name
     if (Test-Path -LiteralPath $releaseInstaller) {
         throw "Refusing to overwrite an existing release artifact: $releaseInstaller"
     }
 
     if (-not $SkipTests) {
+        $clock = [Diagnostics.Stopwatch]::StartNew()
         python -m unittest discover -s tests -v
         if ($LASTEXITCODE -ne 0) {
             throw "Automated tests failed."
         }
+        $timings.tests_seconds = [math]::Round($clock.Elapsed.TotalSeconds, 3)
     }
 
     $spec = Get-ChildItem -LiteralPath $projectRoot -Filter "*.spec" -File |
@@ -59,19 +67,27 @@ try {
         throw "No Windows PyInstaller spec was found."
     }
 
-    python -m PyInstaller --noconfirm --clean $spec.FullName
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $pyInstallerArguments = @('--noconfirm')
+    if ($CleanRebuild) { $pyInstallerArguments += '--clean' }
+    python -m PyInstaller @pyInstallerArguments $spec.FullName
     if ($LASTEXITCODE -ne 0) {
         throw "PyInstaller build failed."
     }
+    $timings.pyinstaller_seconds = [math]::Round($clock.Elapsed.TotalSeconds, 3)
 
+    $clock.Restart()
     & (Join-Path $PSScriptRoot 'verify_windows_startup.ps1')
+    $timings.startup_seconds = [math]::Round($clock.Elapsed.TotalSeconds, 3)
 
     $buildOutputDirectory = Join-Path $releaseDirectory ("work\{0}-{1}" -f $metadata.output_version, [guid]::NewGuid().ToString("N"))
     New-Item -ItemType Directory -Path $buildOutputDirectory -Force | Out-Null
+    $clock.Restart()
     & $iscc "/DMyAppVersion=$($metadata.app_version)" "/DMyVersionInfo=$($metadata.version_info)" "/DMyOutputVersion=$($metadata.output_version)" "/DMyAppOutputDir=$buildOutputDirectory" "packaging\windows\NanfengDownloader.iss"
     if ($LASTEXITCODE -ne 0) {
         throw "Inno Setup build failed."
     }
+    $timings.installer_seconds = [math]::Round($clock.Elapsed.TotalSeconds, 3)
 
     $installer = Join-Path $buildOutputDirectory $metadata.installer_name
     if (-not (Test-Path -LiteralPath $installer)) {
@@ -80,6 +96,11 @@ try {
 
     New-Item -ItemType Directory -Path $releaseDirectory -Force | Out-Null
     Move-Item -LiteralPath $installer -Destination $releaseInstaller -ErrorAction Stop
+    $timings.total_seconds = [math]::Round($totalClock.Elapsed.TotalSeconds, 3)
+    [ordered]@{version=$metadata.output_version; clean_rebuild=[bool]$CleanRebuild; timings=$timings;
+        installer=$releaseInstaller; bytes=(Get-Item -LiteralPath $releaseInstaller).Length;
+        signature=(Get-AuthenticodeSignature -LiteralPath $releaseInstaller).Status.ToString()} |
+        ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $releaseDirectory "build-$($metadata.output_version).json") -Encoding UTF8
 
     Write-Output "Installer: $releaseInstaller"
 }

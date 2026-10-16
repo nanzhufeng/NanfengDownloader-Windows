@@ -59,14 +59,22 @@ def release_metadata_from_tag(tag: str) -> ReleaseMetadata:
     return metadata
 
 
-def validate_source_version(metadata: ReleaseMetadata, source_path: Path) -> None:
-    """Reject a differently labelled installer without importing the desktop UI."""
+def read_source_version(source_path: Path) -> str:
+    """Read the desktop version without importing Qt or authentication code."""
     tree = ast.parse(source_path.read_text(encoding="utf-8-sig"))
     source_version = None
     for node in tree.body:
         if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "APP_VERSION" for target in node.targets):
             if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
                 source_version = node.value.value
+    if not source_version:
+        raise ValueError(f"未找到源码版本：{source_path}")
+    return source_version
+
+
+def validate_source_version(metadata: ReleaseMetadata, source_path: Path) -> None:
+    """Reject a differently labelled installer without importing the desktop UI."""
+    source_version = read_source_version(source_path)
     expected = f"v{metadata.output_version}"
     if source_version != expected:
         raise ValueError(f"源码关于版本 {source_version!r} 与发行版本 {expected!r} 不一致，请先同步 app/main.py 的 APP_VERSION 和开发时间。")
@@ -77,10 +85,14 @@ def main() -> int:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--version")
     group.add_argument("--tag")
+    group.add_argument("--from-source", type=Path)
     parser.add_argument("--format", choices=("json", "shell"), default="json")
     parser.add_argument("--check-source", type=Path, help="核对源码关于版本，拒绝错版安装包")
     args = parser.parse_args()
-    metadata = release_metadata(args.version) if args.version else release_metadata_from_tag(args.tag)
+    if args.from_source:
+        metadata = release_metadata(read_source_version(args.from_source).removeprefix("v"))
+    else:
+        metadata = release_metadata(args.version) if args.version else release_metadata_from_tag(args.tag)
     if args.check_source:
         validate_source_version(metadata, args.check_source)
     if args.format == "json":
