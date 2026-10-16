@@ -1,9 +1,9 @@
 # 南枫下载 Windows 项目状态
 
 ## Verified
-- Last verified: 2026-10-16 09:36 +08:00
+- Last verified: 2026-10-16 10:16 +08:00
 - Branch: main
-- Code baseline: 当前源码对应冻结 Windows v2026.10.16，准备同步 main 与独立 v2026.10.16-windows 标签。
+- Code baseline: cd35f5f6bd91938c91a886dcdf1004bb59c3c87e；v2026.10.16-windows 标签与冻结源码一致，main 后续仅发布记录收尾。
 - Verified by: Codex
 - Status: Active
 - Scope: Windows v2026.10.16 源码、205 项完整测试、冻结 EXE、安装包及真实预览；本版安装／卸载未执行。
@@ -25,7 +25,7 @@
 - 当前源码 BAT：仓库根目录 `启动南枫下载.bat`。
 
 ## In Progress
-- v2026.10.16 安装包已冻结；待源码同步、正式 Release 上传与远端下载回验。
+- 无进行中的发布动作；v2026.10.16 已正式公开，唯一 Setup EXE 已完成远端下载回验。
 
 ## Blocked
 - 本版安装／卸载未重新运行。前次同类验收命令被自动批准审查拒绝（blocked by policy）；未换调用方式绕过，也未沿用前版安装结论。
@@ -40,7 +40,7 @@
 | 当前 Build／启动 | PASS | PyInstaller EXE 与 Inno Setup 7 x64；隔离配置、冻结窗口响应、随包工具与真实截图通过；发布结构合同 14 项通过 |
 | 当前 Installer | NOT RUN | 前次同类验收被自动审查拒绝，本轮未绕过；冻结启动不代表安装通过 |
 | 当前 Signature | NOT SIGNED | Get-AuthenticodeSignature；安装包 157124878 字节，版本 2026.10.16 |
-| 当前 Remote asset | PENDING | 待上传及重新下载回验；本版证据见 verification/windows-installer-release-20261016.md |
+| 当前 Remote asset | PASS | 最新正式 Release；唯一 Setup EXE、uploaded、157124878 字节；重新下载与冻结收据及本地文件一致。本版证据见 verification/windows-installer-release-20261016.md |
 
 ## Gaps
 - 本轮未重新验收外部平台真实下载；磁力链接和 BT 公网下载仍未完成真实验收。
@@ -49,13 +49,13 @@
 - 前版中断编译的 110653444 字节临时残留回收被自动审查拒绝，本轮未删除；位置与证据见 verification/windows-installer-release-20261012-1.md。
 
 ## Sync & Safety
-- Observed at: 2026-10-16 09:36 +08:00
+- Observed at: 2026-10-16 10:16 +08:00
 - Docs: 当前合同已统一；README 三张图来自 v2026.10.16 冻结 EXE 实际界面。
-- Git: 准备同步 main 与 v2026.10.16-windows 标签；旧版本冻结文件未改动。
-- Remote: v2026.10.16 待上传；历史 v2026.10.13 保留独立证据。
+- Git: main 与独立 v2026.10.16-windows 标签已同步，后续仅发布记录；旧版本冻结文件未改动。
+- Remote: v2026.10.16 为最新正式 Release，10:15:48 发布，10:16 重新下载回验通过；历史版本保留独立证据。
 - Rollback point: 1e36a7771357836f1ebfe68155804c12f79a2611（此前已发布的 v2026.09.15-windows）
 - Secrets/config risk: NONE（app/scripts/packaging/docs/tests 的典型真实凭据模式未命中；预览已脱敏；设计会话目录不提交）
 
 ## Next
-1. 同步源码与 v2026.10.16 安装包并完成远端回验；当前源码仍可用根目录 BAT 启动。
+1. 从 GitHub 下载 v2026.10.16，或用根目录 BAT 启动当前源码；本轮不再构建／上传。
 2. 后续按单独授权进行外部平台真实下载及 BT 公网验收。
