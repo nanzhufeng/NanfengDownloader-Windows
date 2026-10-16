@@ -20,3 +20,5 @@
 - 修正后源码 20f2a156cd128a65093a74cc20abf3c359430b89，运行 https://github.com/nanzhufeng/NanfengDownloader-Windows/actions/runs/38846891113 成功，publish=false，未创建正式 Release。
 - 03:42:57Z 至 03:49:17Z，总 6 分 20 秒；208 测试通过（20.824 秒）；PyInstaller、Inno 编译、隔离冻结启动、随包 Node／FFmpeg 检查通过。候选 artifact 176916064 字节，ID 12023573226；03:49:02 安装包完成，03:49:11 候选上传完成。
 - 云端使用 FFmpeg 9.0.1 等锁定工具链，与本机已安装产物不同；候选包不能冒称与本机冻结包字节一致。正式 Release 发布步骤本次跳过，公开资产下载回验须在真正发布时另做。
+
+- 云候选已下载至 D:\ReleaseUpload\NanfengDownloader\cloud-candidate-20f2a15；EXE 176754601 字节，与云 build 收据一致，本地验签 NotSigned。云构建阶段 234.544 秒，其中 PyInstaller 57.671 秒、启动 12.618 秒、Inno 164.107 秒；与本机 157116543 字节产物独立保留。
