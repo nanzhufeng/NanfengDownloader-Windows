@@ -72,8 +72,8 @@ from .windows_shell import reveal_file_in_explorer
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.13"
-APP_DEVELOPED_AT = "2026-10-13 22:35"
+APP_VERSION = "v2026.10.16"
+APP_DEVELOPED_AT = "2026-10-16 09:32"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -1032,12 +1032,12 @@ class MainWindow(QMainWindow):
         workflow_steps.setSpacing(0)
         self.workflow_step_rows = []
         workflow_specs = [
-            ("登录账号", QStyle.SP_DirHomeIcon),
-            ("粘贴链接", QStyle.SP_FileIcon),
-            ("读取列表", QStyle.SP_FileDialogListView),
-            ("勾选下载", QStyle.SP_DialogApplyButton),
+            "登录账号",
+            "粘贴链接",
+            "读取列表",
+            "勾选下载",
         ]
-        for index, (text, icon_type) in enumerate(workflow_specs, start=1):
+        for index, text in enumerate(workflow_specs, start=1):
             row = QWidget()
             row.setObjectName("WorkflowStepRow")
             row_layout = QHBoxLayout(row)
@@ -1045,27 +1045,12 @@ class MainWindow(QMainWindow):
             row_layout.setSpacing(9)
 
             mark = WorkflowRailMark(index, index == 1, index == len(workflow_specs))
-            icon_label = QLabel()
-            icon_label.setObjectName("WorkflowActionIcon")
-            icon_label.setFixedSize(18, 18)
-            icon_pixmap = self.style().standardIcon(icon_type).pixmap(18, 18)
-            neutral_icon = QPixmap(icon_pixmap.size())
-            neutral_icon.fill(Qt.transparent)
-            icon_painter = QPainter(neutral_icon)
-            icon_painter.drawPixmap(0, 0, icon_pixmap)
-            icon_painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
-            icon_painter.fillRect(neutral_icon.rect(), QColor("#526171"))
-            icon_painter.end()
-            icon_label.setPixmap(neutral_icon)
-            icon_label.setAlignment(Qt.AlignCenter)
-
             step_label = QLabel(text)
             step_label.setObjectName("WorkflowStepText")
             row_layout.addWidget(mark)
-            row_layout.addWidget(icon_label)
             row_layout.addWidget(step_label, 1)
             workflow_steps.addWidget(row)
-            self.workflow_step_rows.append((row, mark, icon_label, step_label))
+            self.workflow_step_rows.append((row, mark, step_label))
         sidebar_layout.addLayout(workflow_steps)
         sidebar_layout.addStretch(1)
 
@@ -1802,6 +1787,53 @@ class MainWindow(QMainWindow):
                 border-bottom: 1px solid #f0f2f4;
                 padding: 4px 6px;
             }
+            QTableWidget#DownloadQueueTable QScrollBar:vertical {
+                background: transparent;
+                border: none;
+                width: 14px;
+                margin: 4px 0;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar:horizontal {
+                background: transparent;
+                border: none;
+                height: 14px;
+                margin: 0 4px;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::handle {
+                background: #949494;
+                border: none;
+                border-radius: 4px;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::handle:vertical {
+                min-height: 40px;
+                margin: 0 3px;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::handle:horizontal {
+                min-width: 40px;
+                margin: 3px 0;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::handle:hover {
+                background: #7e7e7e;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::handle:pressed {
+                background: #6b6b6b;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::add-line,
+            QTableWidget#DownloadQueueTable QScrollBar::sub-line {
+                background: transparent;
+                border: none;
+                width: 0;
+                height: 0;
+            }
+            QTableWidget#DownloadQueueTable QScrollBar::add-page,
+            QTableWidget#DownloadQueueTable QScrollBar::sub-page {
+                background: transparent;
+                border: none;
+            }
+            QTableWidget#DownloadQueueTable::corner {
+                background: #ffffff;
+                border: none;
+            }
             QHeaderView::section {
                 background: #f3f5f7;
                 color: #465365;
@@ -2490,6 +2522,8 @@ class MainWindow(QMainWindow):
     def _on_table_item_clicked(self, item: QTableWidgetItem) -> None:
         if item.column() == COL_TITLE:
             self._copy_table_cell(item.row(), COL_TITLE, "标题")
+        elif item.column() == COL_CREATOR:
+            self._copy_table_cell(item.row(), COL_CREATOR, "博主")
         elif item.column() == COL_LINK:
             self._copy_table_cell(item.row(), COL_LINK, "链接")
 

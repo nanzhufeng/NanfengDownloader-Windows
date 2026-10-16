@@ -1,25 +1,25 @@
 # 当前交接
 
-2026-10-13 22:59 +08:00；D:\CodexProjects\NanfengDownloader-Windows。
+2026-10-16 09:36 +08:00；D:\CodexProjects\NanfengDownloader-Windows。
 
-用户已授权“打包上传 GitHub”。本轮 v2026.10.13 修复列表单行显示并更新真实预览、版本及发布资料。
+用户已授权“打包上传 GitHub”。本轮 v2026.10.16 包含流程图标删除、博主点击复制、列表滚动条优化。
 
 ## 已完成
 
-- QTableWidget 关闭自动换行，统一 SingleLineItemDelegate 末尾省略；显式换行仅在绘制时合并，原始任务数据、完整悬浮提示及历史恢复不变。
-- 新增 test_queue_single_line；205 项完整测试通过（28.905 秒），compileall 与限定 diff 检查通过；Windows 原生单行绘制另验通过。
-- 固定 build／dist 缓存构建成功；PyInstaller 冻结窗口、独立临时配置、原生 WM_NULL 响应及随包工具均通过。
-- 安装包已冻结：D:\ReleaseUpload\NanfengDownloader\NanfengDownloader-Windows-v2026.10.13-Setup.exe，157130748 字节；程序与安装包 NotSigned。
-- README 三张图来自当前冻结 EXE；脱敏合成行，长标题单行省略，没有启动下载；发布结构合同 14 项通过。
-- 本版证据：docs/verification/windows-installer-release-20261013.md。旧 v2026.10.12.1 冻结文件及验收文档不覆盖。
+- 侧栏步骤保留编号、连接线、文字；删除四个图标及占位。博主列复用现有复制入口，完整名称及提示不受单行省略影响。
+- 下载队列表格横纵滚动条统一圆角灰色滑块，去箭头与外框；14px 控件内缩 3px，滑块最短 40px，悬停／按下加深。
+- 205 项完整 unittest 通过（15.185 秒）；定向回归、原生滚动交互与实际点击复制验证通过；compileall 与限定 diff 检查通过。
+- 固定 build／dist 构建成功；独立配置与登录资料、冻结窗口响应、随包 aria2／FFmpeg／Node 通过。
+- 安装包冻结：D:\ReleaseUpload\NanfengDownloader\NanfengDownloader-Windows-v2026.10.16-Setup.exe；157124878 字节，NotSigned，版本 2026.10.16。
+- README 三张预览来自当前冻结 EXE，14 条脱敏合成行展示新滚动条，没有启动下载；发布结构合同 14 项通过。
+- 本版证据：docs/verification/windows-installer-release-20261016.md。旧版冻结文件与验收文档不覆盖。
 
-## 发布终态
+## 待完成
 
-- main 与独立 v2026.10.13-windows 标签已同步；准确源码提交 edd8148321ce4b3f8e27d6143cae8bc392726909，后续仅发布终态记录。
-- https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.13-windows；22:58:26 +08:00 正式发布，draft=false、prerelease=false，已为 latest。
-- 唯一 Setup EXE 状态 uploaded，157130748 字节；22:59 从 GitHub 重新下载，与最初冻结收据及当前本地文件完全一致。Release 不加展示图片或 SHA-256。
-- 本轮发布完成，不再运行构建／上传；后续单独反馈再启动新工作。
+1. 提交 main 并创建准确提交的 v2026.10.16-windows 标签，同步至 GitHub。
+2. 正式 Release 只上传一个 Setup EXE，随后核对元数据并重新下载，验证与冻结文件一致。
+3. 更新发布终态记录，不再重新生成冻结文件。
 
-本版安装／卸载未重新运行：前次同类命令被自动批准审查拒绝，本轮不换调用方式绕过，也不把前版证据算作本版。外部平台实际媒体下载、BT 公网、多 DPI／读屏仍未重新验收。旧中断编译残留见前版验收记录，本轮未删除。
+本版安装／卸载未重新运行：前次同类验收被自动批准审查拦截，本轮未换方式绕过，也不把前版安装或冻结启动算作本版安装验收。外部平台实际下载、BT 公网、多 DPI／读屏仍待验收。旧中断编译残留见前版记录，本轮未删除。
 
-当前源码入口：启动南枫下载.bat。未覆盖用户现用安装目录，未清理下载／登录数据；冻结文件不再重新生成。
+当前源码入口：启动南枫下载.bat。未覆盖用户现用安装目录，未清理下载或登录数据。
