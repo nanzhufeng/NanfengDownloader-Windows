@@ -37,10 +37,12 @@ class YouTubeCatalogFastPathTests(unittest.TestCase):
 
     @patch("app.catalog.build_youtube_runtime_options", return_value={})
     @patch("app.catalog._discover_youtube_items_once", return_value=[])
-    def test_channel_still_uses_the_catalog_reader(self, discover_once, _build_runtime_options) -> None:
+    @patch("app.catalog.export_auth_cookies_txt", return_value=Path("fixture-cookies.txt"))
+    def test_channel_still_uses_the_catalog_reader(self, export_cookies, discover_once, _build_runtime_options) -> None:
         discover_youtube_items("https://www.youtube.com/@OpenAI/videos", self.options)
 
         discover_once.assert_called_once()
+        export_cookies.assert_called_once_with("youtube")
 
 
 if __name__ == "__main__":
