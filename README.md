@@ -12,11 +12,11 @@
 
 ![南枫下载 Windows 下拉弹窗](docs/assets/nanfeng-downloader-windows-popup.png)
 
-预览来自 Windows v2026.10.16 的冻结 EXE 实际运行界面：主工作台 1820 × 1000、设置页 760 × 620；列表为脱敏演示数据，展示单行省略与圆角滚动条，未启动下载。
+预览来自 Windows v2026.10.16.1 的冻结 EXE 实际运行界面：主工作台 1820 × 1000、设置页 760 × 620；列表为脱敏演示数据，展示单行省略与圆角滚动条，未启动下载。
 
 ## 下载安装
 
-Windows 安装包：[v2026.10.16](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.16-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.16.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
+Windows 安装包：[v2026.10.16.1](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.16.1-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.16.1.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
 
 Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 
