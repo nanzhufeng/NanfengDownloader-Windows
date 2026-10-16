@@ -1,4 +1,8 @@
 import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from app.downloader import DownloadOptions
 
 from app.douyin import (
     _background_browser_args,
@@ -9,6 +13,26 @@ from app.douyin import (
 
 
 class BackgroundBrowserArgsTests(unittest.TestCase):
+    def test_cookie_recovery_finishes_before_opening_browser_capture(self):
+        from app import douyin
+        recovered = []
+        class BrowserBoundaryReached(Exception):
+            pass
+        class BrowserScope:
+            def __enter__(scope):
+                self.assertTrue(recovered, 'recovering cookies inside a running Playwright scope nests the Sync API')
+                raise BrowserBoundaryReached()
+            def __exit__(scope, *args):
+                pass
+        options = DownloadOptions(Path('.'), 'best', 'software', None, None)
+        for capture in (lambda: douyin._sniff_douyin_with_browser('1234567890123456789', options),
+                        lambda: douyin._discover_douyin_with_browser('author', options, 5)):
+            recovered.clear()
+            with patch('app.douyin._find_chrome_path', return_value='browser.exe'), \
+                 patch('app.douyin._playwright_cookies_from_options', side_effect=lambda _: recovered.append(True) or []), \
+                 patch('playwright.sync_api.sync_playwright', return_value=BrowserScope()):
+                with self.assertRaises(BrowserBoundaryReached): capture()
+
     def test_windows_args_hide_background_browser_window(self) -> None:
         args = _background_browser_args("nt")
 

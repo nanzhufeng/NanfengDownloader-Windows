@@ -32,6 +32,41 @@ class FakeResponse:
 
 
 class DouyinDownloadResilienceTests(unittest.TestCase):
+    def test_douyin_emits_exact_original_title_before_transfer(self):
+        title = '原标题：汽车怎么选？ #测试'
+        info = DouyinInfo(aweme_id='123', title=title, author_name='原作者', video_url='https://example.test/media.mp4')
+        progress=[]
+        def transfer(url, target, *args):
+            self.assertEqual(progress[0]['info_dict']['title'], title)
+            self.assertEqual(progress[0]['info_dict']['uploader'], '原作者')
+            target.parent.mkdir(parents=True,exist_ok=True); target.write_bytes(b'fixture')
+        with tempfile.TemporaryDirectory() as root, \
+             patch('app.douyin._fetch_douyin_info',return_value=info), \
+             patch('app.douyin._download_binary',side_effect=transfer), \
+             patch('app.douyin._validate_douyin_output'):
+            download_douyin_url('https://www.douyin.com/video/123',
+                DownloadOptions(Path(root),'最佳画质','软件内登录',None,None),progress.append)
+
+    def test_cookie_recovery_is_once_per_download_even_when_no_cookies_exist(self):
+        import http.cookiejar
+        from app import douyin
+        from app.auth_profile import AUTH_COOKIE_MODE
+        def fetch(url, options):
+            douyin._build_cookie_jar(options); douyin._build_cookie_jar(options)
+            return DouyinInfo(aweme_id='123', title='fixture', video_url='https://example.test/media.mp4')
+        def transfer(url, path, options, *args):
+            douyin._build_cookie_jar(options)
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(b'fixture')
+        with tempfile.TemporaryDirectory() as root, \
+             patch('app.douyin.cookie_jar_from_auth_profile', side_effect=lambda _: http.cookiejar.CookieJar()) as recover, \
+             patch('app.douyin._fetch_douyin_info', side_effect=fetch), \
+             patch('app.douyin._download_binary', side_effect=transfer), \
+             patch('app.douyin._validate_douyin_output'):
+            for i in range(2):
+                options = DownloadOptions(Path(root)/str(i), 'best', AUTH_COOKIE_MODE, None, None)
+                download_douyin_url('https://www.douyin.com/video/123', options, lambda _: None)
+            self.assertEqual(recover.call_count, 2, 'empty cookie results must also be reused within this download')
+
     def test_packet_validation_failure_refreshes_url_and_redownloads_once(self) -> None:
         info = DouyinInfo(
             aweme_id="1234567890123456789",

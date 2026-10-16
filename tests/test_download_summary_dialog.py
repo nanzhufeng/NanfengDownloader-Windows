@@ -9,7 +9,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QLabel, QPushButton
 
-from app.main import APP_DEVELOPED_AT, APP_GITHUB_REPOSITORY, APP_VERSION, AboutDialog, AppSettingsDialog, DownloadSummaryDialog, MainWindow
+from app.main import APP_DEVELOPED_AT, APP_GITHUB_REPOSITORY, APP_GITHUB_URL, APP_VERSION, AboutDialog, AppSettingsDialog, DownloadSummaryDialog, MainWindow
 
 
 class DownloadSummaryDialogTests(unittest.TestCase):
@@ -105,10 +105,20 @@ class DownloadSummaryDialogTests(unittest.TestCase):
         self.assertIn("南枫下载", labels)
         self.assertIn(f"Desktop 版 {APP_VERSION}", labels)
         self.assertIn(f"开发时间  {APP_DEVELOPED_AT}", labels)
-        self.assertIn(f"源码与更新：GitHub · {APP_GITHUB_REPOSITORY}", labels)
-        self.assertEqual(about.github_button.objectName(), "AboutGitHubButton")
+        self.assertIn(f"GitHub · {APP_GITHUB_REPOSITORY}</a>", about.github_link.text())
+        self.assertIn(f'href="{APP_GITHUB_URL}"', about.github_link.text())
+        self.assertIsNone(about.findChild(QPushButton, "AboutGitHubButton"))
+        self.assertTrue(about.github_link.textInteractionFlags() & Qt.LinksAccessibleByKeyboard)
+        with patch("app.main.QDesktopServices.openUrl", return_value=False) as open_url:
+            about.github_link.linkActivated.emit(APP_GITHUB_URL)
+            self.assertEqual(open_url.call_args.args[0].toString(), APP_GITHUB_URL)
+            self.assertFalse(about.github_error.isHidden())
+            self.assertIn("未能打开默认浏览器", about.github_error.text())
+        with patch("app.main.QDesktopServices.openUrl", return_value=True):
+            about.github_link.linkActivated.emit(APP_GITHUB_URL)
+            self.assertTrue(about.github_error.isHidden())
 
-    def test_settings_switches_and_feature_review_are_interactive(self) -> None:
+    def test_settings_switches_are_interactive_without_feature_review(self) -> None:
         dialog = AppSettingsDialog(False, True, False)
         dialog.show()
         self.app.processEvents()
@@ -117,11 +127,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             self.assertTrue(dialog.completion_sound_enabled())
             QTest.keyClick(dialog.completion_sound_checkbox, Qt.Key_Space)
             self.assertFalse(dialog.completion_sound_enabled())
-            self.assertFalse(dialog.review_details.isVisible())
-            QTest.mouseClick(dialog.review_button, Qt.LeftButton)
-            self.assertTrue(dialog.review_details.isVisible())
-            QTest.mouseClick(dialog.review_button, Qt.LeftButton)
-            self.assertFalse(dialog.review_details.isVisible())
+            self.assertIsNone(dialog.findChild(QPushButton, "SettingsReviewButton"))
             QTest.mouseClick(dialog.findChild(QPushButton, 'SettingsCancelButton'), Qt.LeftButton)
             self.assertEqual(dialog.result(), QDialog.DialogCode.Rejected)
         finally:
@@ -140,7 +146,13 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                 button.setFocus(Qt.TabFocusReason)
                 self.app.processEvents()
                 focused = button.grab().toImage().copy(interior)
-                self.assertEqual(normal, focused, button.objectName())
+                if button is window.settings_button:
+                    # Sidebar focus is a uniform gray fill, never an inner frame.
+                    for x in (12, focused.width() - 13):
+                        for y in range(6, focused.height() - 6):
+                            self.assertEqual(focused.pixelColor(x, y).name(), '#e7e7e7')
+                else:
+                    self.assertEqual(normal, focused, button.objectName())
         finally:
             window.close()
 

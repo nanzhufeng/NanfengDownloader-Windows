@@ -141,7 +141,7 @@ class QueuePersistenceTests(unittest.TestCase):
                 window.close()
 
         self.assertEqual(set(payload), {"version", "rows"})
-        self.assertEqual(set(payload["rows"][0]), {"url", "platform", "creator", "quality", "title", "status", "selected", "output_files"})
+        self.assertEqual(set(payload["rows"][0]), {"url", "platform", "creator", "quality", "title", "source_title", "history_id", "status", "selected", "output_files"})
 
 
 if __name__ == "__main__":

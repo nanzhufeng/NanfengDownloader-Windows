@@ -6,6 +6,8 @@ import sys
 import re
 import time
 import traceback
+import sqlite3
+import uuid
 import urllib.request
 try:
     import winsound
@@ -15,8 +17,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
-from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QPen
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
+from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -38,6 +40,7 @@ from PySide6.QtWidgets import (
     QStyle,
     QStyledItemDelegate,
     QStyleOptionButton,
+    QStackedWidget,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -68,11 +71,13 @@ from .downloader import (
 from .media_validation import MEDIA_FILE_SUFFIXES, is_probable_existing_media
 from .url_safety import url_host_matches
 from .windows_shell import reveal_file_in_explorer
+from .history_store import HistoryStore
+from .history_page import HistoryPage, shell_icon
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.16.1"
-APP_DEVELOPED_AT = "2026-10-16 11:20"
+APP_VERSION = "v2026.10.16.2"
+APP_DEVELOPED_AT = "2026-10-16 19:10"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -103,8 +108,8 @@ def button_feedback_stylesheet(stylesheet: str) -> str:
     )
     neutral_buttons = ["QPushButton"] + [
         f"QPushButton#{name}" for name in (
-            "SettingsButton", "SettingsCancelButton", "SettingsReviewButton",
-            "OpenAboutButton", "AboutGitHubButton", "AboutCloseButton", "ClearButton",
+            "SettingsButton", "SettingsCancelButton",
+            "OpenAboutButton", "AboutCloseButton", "ClearButton",
         )
     ]
     neutral_states = "\n".join(
@@ -294,6 +299,24 @@ class StatusPillDelegate(SingleLineItemDelegate):
 
 
 
+
+
+class QueueSurface(QFrame):
+    """表头与白色列表共用一个抗锯齿圆角表面。"""
+
+    def __init__(self, header: QHeaderView) -> None:
+        super().__init__()
+        self.header = header
+        self.setObjectName("QueueCard")
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        outline = QPainterPath()
+        outline.addRoundedRect(QRectF(self.rect()), 14, 14)
+        painter.setClipPath(outline)
+        painter.fillRect(self.rect(), QColor("#ffffff"))
+        painter.fillRect(QRect(0, 0, self.width(), self.header.height()), QColor("#f3f5f7"))
 
 
 class CompactStatusLabel(QLabel):
@@ -503,24 +526,45 @@ class AboutDialog(QDialog):
         for text in (
             "开发者：席瑞",
             "联系邮箱：nanzhufeng.studio@gmail.com",
-            f"源码与更新：GitHub · {APP_GITHUB_REPOSITORY}",
-            "版权所有 © 2026 席瑞",
         ):
             detail = QLabel(text)
             detail.setObjectName("AboutDetail")
             detail.setWordWrap(True)
             card_layout.addWidget(detail)
 
-        self.github_button = QPushButton("打开 GitHub")
-        self.github_button.setObjectName("AboutGitHubButton")
-        self.github_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(APP_GITHUB_URL)))
-        card_layout.addWidget(self.github_button, alignment=Qt.AlignLeft)
+        self.github_link = QLabel(
+            f'源码与更新：<a href="{APP_GITHUB_URL}" style="color: #3461ff; text-decoration: none;">'
+            f'GitHub · {APP_GITHUB_REPOSITORY}</a>'
+        )
+        self.github_link.setObjectName("AboutDetail")
+        self.github_link.setWordWrap(True)
+        self.github_link.setTextInteractionFlags(Qt.LinksAccessibleByMouse | Qt.LinksAccessibleByKeyboard)
+        self.github_link.setFocusPolicy(Qt.StrongFocus)
+        self.github_link.setToolTip("在默认浏览器中打开 GitHub 仓库")
+        self.github_link.linkActivated.connect(self._open_github)
+        card_layout.addWidget(self.github_link)
+        self.github_error = QLabel()
+        self.github_error.setObjectName("AboutDetail")
+        self.github_error.setWordWrap(True)
+        self.github_error.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.github_error.hide()
+        card_layout.addWidget(self.github_error)
+        copyright_label = QLabel("版权所有 © 2026 席瑞")
+        copyright_label.setObjectName("AboutDetail")
+        card_layout.addWidget(copyright_label)
         layout.addWidget(card)
 
         close_button = QPushButton("关闭")
         close_button.setObjectName("AboutCloseButton")
         close_button.clicked.connect(self.accept)
         layout.addWidget(close_button, alignment=Qt.AlignRight)
+
+    def _open_github(self, _url: str) -> None:
+        if QDesktopServices.openUrl(QUrl(APP_GITHUB_URL)):
+            self.github_error.hide()
+        else:
+            self.github_error.setText(f"未能打开默认浏览器，请复制此链接到浏览器打开：{APP_GITHUB_URL}")
+            self.github_error.show()
 
 
 class SettingsSwitch(QCheckBox):
@@ -590,7 +634,7 @@ class AppSettingsDialog(QDialog):
         self.resize(760, 620)
         self.setStyleSheet(button_feedback_stylesheet("""
             QDialog#AppSettingsDialog { background: #ffffff; }
-            QFrame#SettingsCard, QFrame#SettingsReview { background: #f3f6f8; border: none; border-radius: 14px; }
+            QFrame#SettingsCard { background: #f3f6f8; border: none; border-radius: 14px; }
             QLabel { background: transparent; color: #18303f; font-size: 14px; font-family: "Microsoft YaHei UI"; }
             QLabel#AppSettingsTitle { font-size: 24px; font-weight: 700; }
             QLabel#SettingsSectionTitle { font-size: 17px; font-weight: 700; }
@@ -600,7 +644,6 @@ class AppSettingsDialog(QDialog):
             QPushButton:hover { background: #eef4f2; }
             QPushButton#SettingsSaveButton { background: #009b72; color: #ffffff; border: 1px solid #009b72; min-width: 76px; }
             QPushButton#SettingsSaveButton:hover { background: #008764; }
-            QPushButton#SettingsReviewButton { background: transparent; border: 1px solid transparent; text-align: left; border-radius: 12px; }
             QComboBox { min-height: 34px; padding: 0 28px 0 10px; background: #ffffff; border: 1px solid #d9e2e8; border-radius: 8px; font-size: 13px; color: #18303f; }
         """))
         layout = QVBoxLayout(self)
@@ -664,8 +707,8 @@ class AppSettingsDialog(QDialog):
         self.creator_subfolders_checkbox = switch(files, "按频道／作者分文件夹", creator_subfolders_enabled, "CreatorSubfoldersCheckBox")
         hint(files, "关闭时仅按平台整理；开启后，新下载文件再按频道或作者分目录。")
         files.addStretch()
-        history = card("列表记录", QStyle.SP_BrowserReload, 1, 0)
-        self.retain_queue_history_checkbox = switch(history, "保留列表历史记录", retain_queue_history, "RetainQueueHistoryCheckBox")
+        history = card("队列恢复", QStyle.SP_BrowserReload, 1, 0)
+        self.retain_queue_history_checkbox = switch(history, "启动时恢复下载队列", retain_queue_history, "RetainQueueHistoryCheckBox")
         hint(history, "开启后，下次启动恢复列表；关闭并保存后清除已保存的记录，当前列表保留到退出。")
         history.addStretch()
         quality = card("画质选择", QStyle.SP_ComputerIcon, 1, 1)
@@ -679,24 +722,6 @@ class AppSettingsDialog(QDialog):
         hint(quality, "可选择下载原画质或转换画质；转换需要更长时间。")
         quality.addStretch()
 
-        review = QFrame()
-        review.setObjectName("SettingsReview")
-        review_layout = QVBoxLayout(review)
-        review_layout.setContentsMargins(4, 4, 4, 4)
-        self.review_button = QPushButton("功能审阅")
-        self.review_button.setObjectName("SettingsReviewButton")
-        self.review_button.setCheckable(True)
-        self.review_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowDown))
-        review_layout.addWidget(self.review_button)
-        self.review_details = QLabel("列表历史记录：建议保留，设置内随时开关，方便恢复待下载任务。\n粘贴替换链接：建议保留，Ctrl+V 直接更新输入，无需增加常驻按键。")
-        self.review_details.setObjectName("SettingsDescription")
-        self.review_details.setWordWrap(True)
-        self.review_details.setContentsMargins(14, 0, 14, 12)
-        self.review_details.hide()
-        review_layout.addWidget(self.review_details)
-        self.review_button.toggled.connect(self.review_details.setVisible)
-        self.review_button.toggled.connect(lambda opened: self.review_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowUp if opened else QStyle.SP_ArrowDown)))
-        layout.addWidget(review)
         buttons = QHBoxLayout()
         self.about_button = QPushButton("关于南枫下载")
         self.about_button.setObjectName("OpenAboutButton")
@@ -923,6 +948,21 @@ class MainWindow(QMainWindow):
         self.project_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
         self.ffmpeg_dir = find_ffmpeg_dir(self.project_root)
         self.settings = settings if settings is not None else QSettings(SETTINGS_ORGANIZATION, APP_NAME)
+        history_root = (Path(self.settings.fileName()).parent if self.settings.format() == QSettings.IniFormat
+                        else Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'NanfengDownloader')
+        self.history_error = ''
+        try:
+            self.history_store = HistoryStore(history_root / 'history.sqlite3')
+            raw_queue = self.settings.value(SETTING_QUEUE_STATE, '')
+            if isinstance(raw_queue, str) and raw_queue.strip():
+                try:
+                    legacy = json.loads(raw_queue)
+                except json.JSONDecodeError:
+                    legacy = None
+                if isinstance(legacy, dict): self.history_store.import_queue(legacy)
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            self.history_store = None
+            self.history_error = str(exc)
         self.retain_queue_history = setting_as_bool(
             self.settings.value(SETTING_RETAIN_QUEUE_HISTORY, True), default=True,
         )
@@ -959,10 +999,15 @@ class MainWindow(QMainWindow):
         self.check_drag_state = Qt.Unchecked
         self.check_drag_rows: set[int] = set()
         self.row_output_files: dict[int, list[Path]] = {}
+        self.row_transfer_metrics: dict[int, dict] = {}
         self.download_started_at: float | None = None
         self.latest_failure_detail = ""
         self._restoring_queue = False
         self._last_queue_state_json = ""
+        self.aggregate_progress_timer = QTimer(self)
+        self.aggregate_progress_timer.setSingleShot(True)
+        self.aggregate_progress_timer.setInterval(100)
+        self.aggregate_progress_timer.timeout.connect(self._update_main_progress)
         self.queue_persist_timer = QTimer(self)
         self.queue_persist_timer.setSingleShot(True)
         self.queue_persist_timer.setInterval(450)
@@ -988,6 +1033,8 @@ class MainWindow(QMainWindow):
         self._restore_queue_state()
         self._update_cookie_file_state()
         self._update_status()
+        if self.history_error:
+            self.status_label.setText(f'下载历史暂不可用：{self.history_error}')
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -1053,23 +1100,43 @@ class MainWindow(QMainWindow):
         sidebar_layout.addLayout(workflow_steps)
         sidebar_layout.addStretch(1)
 
+        footer_divider = QFrame()
+        footer_divider.setObjectName("SidebarFooterDivider")
+        footer_divider.setFixedHeight(1)
+        sidebar_layout.addWidget(footer_divider)
+        self.history_button = QPushButton("历史")
+        self.history_button.setObjectName("HistoryButton")
+        self.history_button.setCheckable(True)
+        self.history_button.setFixedHeight(40)
+        self.history_button.setIcon(QIcon(str(self.project_root / 'app/assets/sidebar-history.svg')))
+        self.history_button.setIconSize(QSize(16, 16))
+        self.history_button.clicked.connect(lambda: self._show_history(True))
+        sidebar_layout.addWidget(self.history_button)
         self.settings_button = QPushButton("设置")
         self.settings_button.setObjectName("SettingsButton")
-        self.settings_button.setFixedHeight(36)
+        self.settings_button.setFixedHeight(40)
+        self.settings_button.setIcon(QIcon(str(self.project_root / 'app/assets/sidebar-settings.svg')))
+        self.settings_button.setIconSize(QSize(16, 16))
         self.settings_button.clicked.connect(self._open_settings)
         sidebar_layout.addWidget(self.settings_button)
         self.open_folder_button = QPushButton("打开保存目录")
         self.open_folder_button.setObjectName("SideButton")
         self.open_folder_button.setFixedHeight(36)
         self.open_folder_button.clicked.connect(self._open_output_dir)
-        sidebar_layout.addWidget(self.open_folder_button)
         shell.addWidget(sidebar)
 
         content = QWidget()
+        self.download_page = content
+        self.pages = QStackedWidget()
+        self.pages.addWidget(content)
+        self.history_page = HistoryPage(self.history_store, self.ffmpeg_dir, settings=self.settings)
+        self.history_page.back_requested.connect(lambda: self._show_history(False))
+        self.history_page.playback_fullscreen_changed.connect(self._on_playback_fullscreen)
+        self.pages.addWidget(self.history_page)
         layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(14)
-        shell.addWidget(content, 1)
+        shell.addWidget(self.pages, 1)
 
         input_frame = QFrame()
         input_frame.setObjectName("InputGroups")
@@ -1248,6 +1315,7 @@ class MainWindow(QMainWindow):
         action_layout.addWidget(self.select_all_button)
         action_layout.addWidget(self.invert_button)
         action_layout.addStretch(1)
+        action_layout.addWidget(self.open_folder_button)
         layout.addWidget(action_frame)
 
         self.table = QTableWidget(0, 12)
@@ -1290,10 +1358,9 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(COL_LINK, QHeaderView.Stretch)
         header.setSectionResizeMode(COL_LOCATE, QHeaderView.Fixed)
         self.table.setColumnWidth(COL_LOCATE, 76)
-        self.queue_card = QFrame()
-        self.queue_card.setObjectName("QueueCard")
+        self.queue_card = QueueSurface(header)
         queue_card_layout = QVBoxLayout(self.queue_card)
-        queue_card_layout.setContentsMargins(1, 1, 1, 1)
+        queue_card_layout.setContentsMargins(0, 0, 0, 0)
         queue_card_layout.setSpacing(0)
         queue_card_layout.addWidget(self.table)
         layout.addWidget(self.queue_card, 1)
@@ -1483,7 +1550,6 @@ class MainWindow(QMainWindow):
                 font-size: 13px;
             }
             QPushButton#OpenAboutButton,
-            QPushButton#AboutGitHubButton,
             QPushButton#AboutCloseButton {
                 min-height: 28px;
                 padding: 0 12px;
@@ -1494,7 +1560,6 @@ class MainWindow(QMainWindow):
                 font-weight: 700;
             }
             QPushButton#OpenAboutButton:hover,
-            QPushButton#AboutGitHubButton:hover,
             QPushButton#AboutCloseButton:hover {
                 background: #eef3ff;
                 border-color: #9fb3ff;
@@ -1629,8 +1694,8 @@ class MainWindow(QMainWindow):
                 subcontrol-position: top right;
                 width: 30px;
                 border-left: 1px solid #e3e8f1;
-                border-top-right-radius: 6px;
-                border-bottom-right-radius: 6px;
+                border-top-right-radius: 8px;
+                border-bottom-right-radius: 8px;
                 background: #f6f8fc;
             }
             QComboBox::down-arrow {
@@ -1774,10 +1839,10 @@ class MainWindow(QMainWindow):
                 border: 1px solid #e3e8f1;
             }
             QTableWidget {
-                background: #ffffff;
+                background: transparent;
                 alternate-background-color: #fbfcfd;
                 border: none;
-                border-radius: 13px;
+                border-radius: 0;
                 gridline-color: transparent;
                 selection-background-color: #edf3ff;
                 selection-color: #111827;
@@ -1833,8 +1898,9 @@ class MainWindow(QMainWindow):
                 background: #ffffff;
                 border: none;
             }
+            QHeaderView { background: transparent; border: none; }
             QHeaderView::section {
-                background: #f3f5f7;
+                background: transparent;
                 color: #465365;
                 padding: 9px 8px;
                 border: none;
@@ -1854,6 +1920,8 @@ class MainWindow(QMainWindow):
             }
             """
         stylesheet += """
+            QPushButton#HistoryButton { background: #eef0f3; color: #566176; }
+            QPushButton#HistoryButton:checked { background: #dfe3e7; color: #233342; }
             QFrame#Sidebar { background: #ffffff; border: none; border-radius: 14px; }
             QLabel#BrandMark { background: #e6f6f0; color: #008c65; border: none; border-radius: 10px; }
             QLabel#BrandTitle { font-size: 17px; color: #202939; }
@@ -1867,7 +1935,7 @@ class MainWindow(QMainWindow):
             QMainWindow { background: #eef0f3; }
             QFrame#InputGroups, QFrame#UrlButtonPanel { background: transparent; border: none; }
             QFrame#InputGroupCard { background: #ffffff; border: none; border-radius: 14px; }
-            QFrame#QueueCard { background: #ffffff; border: none; border-radius: 14px; }
+            QFrame#QueueCard { background: transparent; border: none; }
             QFrame#LinkEditorSurface { background: #f6f7f9; border: none; border-radius: 8px; }
             QLabel#InputGroupTitle { font-size: 17px; font-weight: 700; color: #202939; }
             QFrame#InputGroupCard QLineEdit,
@@ -1893,10 +1961,36 @@ class MainWindow(QMainWindow):
             QPushButton#SmartImportButton:hover { background: #4d8673; }
             QPushButton#SmartImportButton:pressed { background: #407663; }
         """
-        self.setStyleSheet(button_feedback_stylesheet(stylesheet.replace("__CHEVRON_ICON__", chevron_icon)))
+        footer_style = """
+            QFrame#SidebarFooterDivider { background: #e2e2e2; border: none; }
+            QFrame#Sidebar QPushButton#HistoryButton,
+            QFrame#Sidebar QPushButton#SettingsButton {
+                background: #f1f1f1; color: #243f54; font-size: 14px; font-weight: 600;
+                min-height: 40px; max-height: 40px; border-radius: 20px;
+                border: none; outline: none; padding: 0 14px;
+            }
+            QFrame#Sidebar QPushButton#HistoryButton:checked { background: #f1f1f1; }
+            QFrame#Sidebar QPushButton#HistoryButton:focus,
+            QFrame#Sidebar QPushButton#SettingsButton:focus { background:#e7e7e7; color: #204f70; }
+            QFrame#Sidebar QPushButton#HistoryButton:hover,
+            QFrame#Sidebar QPushButton#SettingsButton:hover { background: #e9e9e9; }
+            QFrame#Sidebar QPushButton#HistoryButton:pressed,
+            QFrame#Sidebar QPushButton#SettingsButton:pressed { background: #e1e1e1; }
+        """
+        self.setStyleSheet(button_feedback_stylesheet(stylesheet.replace("__CHEVRON_ICON__", chevron_icon)) + footer_style)
 
     def _update_status(self) -> None:
         self.status_label.setText(f"队列: {self.table.rowCount()} 项")
+
+    def _on_playback_fullscreen(self, enabled: bool) -> None:
+        self.sidebar.setVisible(not enabled)
+        shell = self.centralWidget().layout()
+        shell.setContentsMargins(*(0, 0, 0, 0) if enabled else (24, 24, 24, 24))
+        shell.setSpacing(0 if enabled else 18)
+
+    def _show_history(self, visible: bool) -> None:
+        self.pages.setCurrentWidget(self.history_page if visible else self.download_page)
+        self.history_button.setChecked(visible)
 
     def _update_cookie_file_state(self) -> None:
         browser_available = find_browser_path() is not None
@@ -2050,6 +2144,7 @@ class MainWindow(QMainWindow):
                 continue
             select_item = self.table.item(row, COL_SELECT)
             status_item = self.table.item(row, COL_STATUS)
+            title_item = self.table.item(row, COL_TITLE)
             quality_widget = self.table.cellWidget(row, COL_QUALITY)
             quality = self._row_quality(row)
             rows.append(
@@ -2059,6 +2154,8 @@ class MainWindow(QMainWindow):
                     "creator": self._cell_text(row, COL_CREATOR),
                     "quality": quality,
                     "title": self._cell_text(row, COL_TITLE),
+                    "source_title": (title_item.data(Qt.UserRole) if title_item else None) or self._cell_text(row, COL_TITLE),
+                    "history_id": link_item.data(Qt.UserRole),
                     "status": status_item.text() if status_item else "等待",
                     "selected": bool(select_item and select_item.checkState() == Qt.Checked),
                     "output_files": [str(path) for path in self.row_output_files.get(row, [])],
@@ -2118,6 +2215,10 @@ class MainWindow(QMainWindow):
                 if not self._add_queue_row(url, platform, title, creator_name=creator):
                     continue
                 row = self.table.rowCount() - 1
+                link_item = self.table.item(row, COL_LINK)
+                if isinstance(saved_row.get('history_id'), str):
+                    link_item.setData(Qt.UserRole, saved_row['history_id'])
+                self.table.item(row, COL_TITLE).setData(Qt.UserRole, str(saved_row.get('source_title') or title))
                 quality_widget = self.table.cellWidget(row, COL_QUALITY)
                 if isinstance(quality_widget, QComboBox):
                     quality_widget.setCurrentText(quality if quality in QUALITY_OPTIONS else self.quality_combo.currentText())
@@ -2261,10 +2362,12 @@ class MainWindow(QMainWindow):
         self._set_quality_cell(row, self.quality_combo.currentText())
         display_title = f"{publish_date} {title}" if publish_date else title
         self._set_cell(row, COL_TITLE, display_title)
+        self.table.item(row, COL_TITLE).setData(Qt.UserRole, display_title)
         self._set_cell(row, COL_PROGRESS, "0%")
         self._set_cell(row, COL_SPEED, "-")
         self._set_cell(row, COL_ETA, "-")
         self._set_cell(row, COL_LINK, url)
+        self.table.item(row, COL_LINK).setData(Qt.UserRole, str(uuid.uuid4()))
         self._set_locate_cell(row)
         self._schedule_queue_persist()
         return True
@@ -2354,6 +2457,13 @@ class MainWindow(QMainWindow):
         self.load_more_button.setEnabled(True)
 
     def _set_cell(self, row: int, column: int, text: str) -> None:
+        item = self.table.item(row, column)
+        if item is not None:
+            if item.text() != text:
+                item.setText(text)
+                if column in FULL_TEXT_TOOLTIP_COLUMNS:
+                    item.setToolTip(self._full_text_tooltip(text))
+            return
         item = QTableWidgetItem(text)
         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
         item.setTextAlignment(Qt.AlignCenter)
@@ -2398,7 +2508,14 @@ class MainWindow(QMainWindow):
         return QColor("#f8fafc"), QColor("#334155")
 
     def _set_status_cell(self, row: int, status: str) -> None:
-        item = QTableWidgetItem(status)
+        item = self.table.item(row, COL_STATUS)
+        if item is not None and item.text() == status:
+            return
+        existing = item is not None
+        if existing:
+            item.setText(status)
+        else:
+            item = QTableWidgetItem(status)
         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
         item.setTextAlignment(Qt.AlignCenter)
         background, foreground = self._status_colors(status)
@@ -2407,7 +2524,8 @@ class MainWindow(QMainWindow):
         font = item.font()
         font.setBold(True)
         item.setFont(font)
-        self.table.setItem(row, COL_STATUS, item)
+        if not existing:
+            self.table.setItem(row, COL_STATUS, item)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.table.viewport():
@@ -2682,6 +2800,9 @@ class MainWindow(QMainWindow):
         if skipped:
             self.status_label.setText(f"已快速跳过 {skipped} 个已存在文件，正在下载剩余项目。")
 
+        for row in items_rows:
+            self.table.item(row, COL_LINK).setData(Qt.UserRole, str(uuid.uuid4()))
+        self._persist_queue_state()
         items = [
             QueueItem(
                 url=self.table.item(row, COL_LINK).text(),
@@ -2768,6 +2889,7 @@ class MainWindow(QMainWindow):
     def _clear_queue(self) -> None:
         self.table.setRowCount(0)
         self.row_output_files.clear()
+        self.row_transfer_metrics.clear()
         self.main_progress.setValue(0)
         self.download_started_at = None
         self.waiting_for_network = False
@@ -2786,6 +2908,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             self.status_label.setText("正在停止后台任务，请稍候再关闭窗口。")
             return
+        self.history_page.shutdown()
         super().closeEvent(event)
 
     def _select_all_rows(self) -> None:
@@ -2804,12 +2927,27 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_item_started(self, row: int) -> None:
+        self.row_transfer_metrics[row]={'started':time.monotonic(),'first_byte':None,'files':{},'network_bytes':0,
+                                        'peak_speed':0,'connections':1,'retries':0}
         self._set_row_output_files(row, [])
         self._set_row_status(row, "下载中")
         self._set_cell(row, COL_PROGRESS, "0%")
 
     @Slot(int, dict)
     def _on_item_progress(self, row: int, info: dict[str, Any]) -> None:
+        metrics=self.row_transfer_metrics.get(row)
+        if metrics is not None:
+            if info.get('status')=='retrying':metrics['retries']+=1
+            metrics['connections']=max(metrics['connections'],int(info.get('connections') or 1))
+            downloaded=info.get('downloaded_bytes')
+            if isinstance(downloaded,(int,float)) and downloaded>0:
+                filename=str(info.get('filename') or '')
+                previous=metrics['files'].get(filename,0)
+                metrics['network_bytes']+=max(0,downloaded-previous)
+                metrics['files'][filename]=downloaded
+                if metrics['first_byte'] is None:metrics['first_byte']=time.monotonic()
+                speed=info.get('speed')
+                if isinstance(speed,(int,float)):metrics['peak_speed']=max(metrics['peak_speed'],speed)
         status = info.get("status")
         media = info.get("info_dict") or {}
         height = media.get("height")
@@ -2820,8 +2958,26 @@ class MainWindow(QMainWindow):
                 previous = widget.blockSignals(True)
                 widget.setToolTip(f"实际下载：{int(height)}p；原选择：{requested}")
                 widget.blockSignals(previous)
+        original_title = media.get("title")
+        if isinstance(original_title, str) and original_title.strip():
+            # Keep the exact source title, independently of the filesystem-safe filename.
+            previous_title = self.table.item(row, COL_TITLE)
+            source_changed = previous_title is None or previous_title.data(Qt.UserRole) != original_title
+            self._set_cell(row, COL_TITLE, original_title)
+            self.table.item(row, COL_TITLE).setData(Qt.UserRole, original_title)
+            creator = media.get("uploader") or media.get("creator") or media.get("channel")
+            if isinstance(creator, str) and creator.strip():
+                self._set_cell(row, COL_CREATOR, creator)
+            link = self.table.item(row, COL_LINK)
+            if source_changed and self.history_store and link:
+                try:
+                    self.history_store.correct_placeholder_titles(link.text(), original_title, creator or '')
+                except (OSError, sqlite3.Error):
+                    pass  # This must not interrupt the transfer; completion still reports archive errors.
         if info.get("filename"):
-            self._set_cell(row, COL_TITLE, Path(str(info["filename"])).name)
+            title_item = self.table.item(row, COL_TITLE)
+            source_title = title_item.data(Qt.UserRole) if title_item else None
+            self._set_cell(row, COL_TITLE, source_title or Path(str(info["filename"])).name)
 
         if status == "downloading":
             self._set_row_status(row, "下载中")
@@ -2869,14 +3025,37 @@ class MainWindow(QMainWindow):
             self._set_cell(row, COL_SPEED, "-")
             self._set_cell(row, COL_ETA, "-")
 
-        self._update_main_progress()
+        if not self.aggregate_progress_timer.isActive():
+            self.aggregate_progress_timer.start()
 
     @Slot(int, str, object)
     def _on_item_finished(self, row: int, file_name: str, files: object) -> None:
+        title_item = self.table.item(row, COL_TITLE)
+        source_title = (title_item.data(Qt.UserRole) or title_item.text()) if title_item else file_name
         self._set_row_status(row, "完成")
-        self._set_cell(row, COL_TITLE, file_name)
+        self._set_cell(row, COL_TITLE, source_title)
+        self.table.item(row, COL_TITLE).setData(Qt.UserRole, source_title)
         self._set_cell(row, COL_PROGRESS, "100%")
         self._set_row_output_files(row, files)
+        try:
+            if self.history_store is None:
+                raise OSError(self.history_error or '历史数据库不可用')
+            link = self.table.item(row, COL_LINK)
+            metrics=self.row_transfer_metrics.get(row)
+            report={}
+            if metrics and metrics['network_bytes']>0:
+                now=time.monotonic()
+                report={key:metrics[key] for key in ('network_bytes','peak_speed','connections','retries')}
+                report['elapsed']=round(now-metrics['started'],3)
+                report['average_speed']=metrics['network_bytes']/max(.001,now-metrics['first_byte'])
+            self.history_store.archive(link.data(Qt.UserRole), title=source_title,
+                url=link.text(), platform=self._cell_text(row, COL_PLATFORM),
+                creator=self._cell_text(row, COL_CREATOR), quality=self._row_quality(row),
+                files=[str(path) for path in self.row_output_files.get(row, [])], completed_at=time.time(),report=report)
+            self.history_page.notify_changed()
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            self.status_label.setText(f'下载已完成，但历史记录保存失败：{exc}')
+        self._persist_queue_state()
         self._update_main_progress()
 
     @Slot(int, str, object)
@@ -2992,6 +3171,7 @@ class MainWindow(QMainWindow):
             self._update_status()
 
     def _update_main_progress(self) -> None:
+        self.aggregate_progress_timer.stop()
         rows = sorted(self.active_download_rows) if self.active_download_rows else list(range(self.table.rowCount()))
         total = len(rows)
         if total == 0:

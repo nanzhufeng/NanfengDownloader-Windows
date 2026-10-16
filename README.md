@@ -10,13 +10,13 @@
 
 ![南枫下载 Windows 设置](docs/assets/nanfeng-downloader-windows-settings.png)
 
-![南枫下载 Windows 下拉弹窗](docs/assets/nanfeng-downloader-windows-popup.png)
+![南枫下载 Windows 下载历史](docs/assets/nanfeng-downloader-windows-history.png)
 
-预览来自 Windows v2026.10.16.1 的冻结 EXE 实际运行界面：主工作台 1820 × 1000、设置页 760 × 620；列表为脱敏演示数据，展示单行省略与圆角滚动条，未启动下载。
+预览来自 Windows v2026.10.16.2 的当前源码实际运行界面：主工作台 1820 × 1000、设置页 760 × 620；队列与历史为脱敏演示数据，历史封面来自合成风景媒体，未启动公网下载。
 
 ## 下载安装
 
-Windows 安装包：[v2026.10.16.1](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.16.1-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.16.1.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
+Windows 安装包：[v2026.10.16.2](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.16.2-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.16.2.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
 
 Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 
@@ -42,6 +42,7 @@ Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen �
 - 支持自动识别最佳可用画质、1080p／720p／360p 上限和仅音频 MP3。
 - 支持每行单独修改分辨率、全选、反选和执行前重新检查勾选。
 - 默认只按平台建立目录，文件名优先使用发布时间加标题；可在设置中开启按频道/作者分文件夹。
+- 下载历史：左侧“历史”打开完整历史页，支持搜索、平台／时间筛选、视频收藏、播放定位与批量管理。删除历史记录保留本地文件；清空队列不清除历史。详见[下载历史说明](docs/download-history.md)。
 - 按任务目标身份检查并跳过本地已有有效媒体，不凭相似列表标题或目录里有其他文件判断成功。
 - 显示进度、速度、剩余时间、等待联网、失败、停止、跳过和完成状态。
 - 网络恢复后自动继续；停止信号会中断 yt-dlp 进度回调、抖音分块读取和 FFmpeg 子进程。

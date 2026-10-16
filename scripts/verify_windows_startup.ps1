@@ -57,7 +57,7 @@ try {
                 $previewReceipt = Join-Path $qaRoot 'preview.json'
                 if (-not (Test-Path -LiteralPath $previewReceipt)) { continue }
                 New-Item -ItemType Directory -Path $PreviewDirectory -Force | Out-Null
-                foreach ($file in @('workbench.png','settings.png','popup.png','preview.json')) {
+                foreach ($file in @('workbench.png','history.png','settings.png','popup.png','preview.json')) {
                     Copy-Item -LiteralPath (Join-Path $qaRoot $file) -Destination $PreviewDirectory -Force
                 }
             }

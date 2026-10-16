@@ -10,6 +10,7 @@
 | 智能读取 | catalog.discover_links 协调；平台适配器返回 CatalogItem；与媒体下载严格分开 | [公共下载合同](shared-download-contract.md)、test_catalog_request_contract、test_douyin_catalog_fast_path |
 | 列表规范与选择 | catalog_rules 清理导航标题并按 URL 去重；DiscoveryWorker 与 CollectionDialog 统一选择；确认只入队 | test_catalog_rules、test_generic_collection、test_discovery_performance |
 | 队列状态 | main.MainWindow；执行前重新检查勾选；每行画质；保存历史可选，关闭保留开关不删除当前列表 | test_queue_persistence、test_download_control |
+| 下载历史 | history_store.HistoryStore 独立 SQLite 归档；history_page.HistoryPage 整页导航与查询管理；成功归档、收藏和删除记录不改变成品或队列 | [下载历史合同](download-history.md)、test_download_history |
 | 队列呈现 | main.SingleLineItemDelegate；所有列单行显示，长文字末尾省略；原始换行仅在绘制时合并。main.MainWindow 统一处理标题、博主与链接的完整悬浮提示及单击复制 | test_queue_single_line；Qt 点击验证 |
 | 队列滚动条 | main.MainWindow._apply_style 限定 DownloadQueueTable；横纵灰色圆角滑块、无端部箭头与外框，保留原生拖动、滚轮及键盘导航 | Windows 原生滚动交互及截图检查 |
 | 下载与画质 | DownloadWorker → quality_fallback → 平台下载器；自动识别、1080p／720p／360p 上限、MP3；必要时明确原画质／转码／取消 | test_quality_cap、test_quality_fallback、test_quality_output_identity |

@@ -9,6 +9,9 @@ import re
 import tempfile
 import subprocess
 import time
+import copy
+from contextvars import ContextVar
+from functools import wraps
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -26,6 +29,20 @@ from .url_safety import url_host_matches
 
 
 ProgressCallback = Callable[[dict[str, Any]], None]
+
+_cookie_session: ContextVar[dict | None] = ContextVar('douyin_cookie_session', default=None)
+DOUYIN_PARALLEL_MIN_BYTES = 16 * 1024 * 1024
+
+
+def _with_cookie_session(function):
+    @wraps(function)
+    def scoped(*args, **kwargs):
+        token = _cookie_session.set({})
+        try:
+            return function(*args, **kwargs)
+        finally:
+            _cookie_session.reset(token)
+    return scoped
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -91,6 +108,17 @@ def is_douyin_url(url: str) -> bool:
 
 
 def _build_cookie_jar(options: DownloadOptions) -> http.cookiejar.CookieJar | None:
+    session = _cookie_session.get()
+    key = (options.cookie_mode, str(options.cookie_file))
+    if session is not None and key in session:
+        return session[key]
+    jar = _load_cookie_jar(options)
+    if session is not None:
+        session[key] = jar
+    return jar
+
+
+def _load_cookie_jar(options: DownloadOptions) -> http.cookiejar.CookieJar | None:
     if options.cookie_mode == AUTH_COOKIE_MODE:
         return cookie_jar_from_auth_profile("douyin")
     if options.cookie_mode in {"Chrome", "Edge", "Firefox"}:
@@ -627,6 +655,8 @@ def _discover_douyin_with_browser(
             seen.add(item_url)
             catalog.append(item)
 
+    # Cookie recovery may itself use Playwright; finish it before this Sync scope.
+    playwright_cookies = _playwright_cookies_from_options(options)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
             executable_path=browser_path,
@@ -638,7 +668,6 @@ def _discover_douyin_with_browser(
             viewport={"width": 1280, "height": 900},
             locale="zh-CN",
         )
-        playwright_cookies = _playwright_cookies_from_options(options)
         if playwright_cookies:
             context.add_cookies(playwright_cookies)
         page = context.new_page()
@@ -701,6 +730,7 @@ def _discover_douyin_with_browser(
     return catalog[:max_items]
 
 
+@_with_cookie_session
 def discover_douyin_author_items(url: str, options: DownloadOptions, max_items: int = 500) -> list[Any]:
     """把抖音作者页短链解析为作品列表，供界面勾选下载。"""
     from .catalog import CatalogItem
@@ -886,6 +916,8 @@ def _sniff_douyin_with_browser(aweme_id: str, options: DownloadOptions) -> Douyi
         if _is_aweme_image_url(url) and url not in image_urls:
             image_urls.append(url)
 
+    # Never nest the cookie-recovery Sync API inside media capture's event loop.
+    playwright_cookies = _playwright_cookies_from_options(options)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(
             executable_path=browser_path,
@@ -897,7 +929,6 @@ def _sniff_douyin_with_browser(aweme_id: str, options: DownloadOptions) -> Douyi
             viewport={"width": 1280, "height": 720},
             locale="zh-CN",
         )
-        playwright_cookies = _playwright_cookies_from_options(options)
         if playwright_cookies:
             context.add_cookies(playwright_cookies)
         page = context.new_page()
@@ -1091,6 +1122,7 @@ def _download_binary(
     max_attempts = DOUYIN_DOWNLOAD_MAX_ATTEMPTS
     first_chunk_is_media = False
     last_network_error: BaseException | None = None
+    parallel_attempted = False
     retryable_network_errors = (
         urllib.error.URLError,
         ConnectionError,
@@ -1128,6 +1160,27 @@ def _download_binary(
                     elif downloaded == 0:
                         total = int(response.headers.get("Content-Length") or 0)
 
+                    if (not parallel_attempted and downloaded == 0 and total >= DOUYIN_PARALLEL_MIN_BYTES
+                            and response.headers.get('Accept-Ranges', '').lower() == 'bytes'):
+                        from .parallel_http import parallel_download
+                        parallel_attempted = True
+                        jar = _build_cookie_jar(options)
+                        def part_opener():
+                            local_jar = http.cookiejar.CookieJar()
+                            for cookie in jar or []: local_jar.set_cookie(copy.copy(cookie))
+                            return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(local_jar))
+                        range_headers = dict(headers)
+                        validator = response.headers.get('ETag') or response.headers.get('Last-Modified')
+                        if validator and not validator.startswith('W/'):
+                            range_headers['If-Range'] = validator
+                        response.close()
+                        if parallel_download(url, target, total, range_headers, part_opener,
+                                             progress_callback, cancel_callback):
+                            return
+                        max_attempts += 1
+                        start_time = time.monotonic()
+                        progress_callback({'status':'retrying','reason':'源站分段响应不完整，已切回单连接继续下载。'})
+                        continue
                     with target.open("ab" if downloaded else "wb") as file_obj:
                         while True:
                             raise_if_cancelled(cancel_callback)
@@ -1150,6 +1203,7 @@ def _download_binary(
                                     "status": "downloading",
                                     "filename": str(target),
                                     "downloaded_bytes": downloaded,
+                                    "speed": speed,
                                     "total_bytes": total,
                                     "_speed_str": _format_speed(speed),
                                     "_eta_str": _format_eta(eta),
@@ -1449,6 +1503,7 @@ def _merge_video_audio(
     return target
 
 
+@_with_cookie_session
 def download_douyin_url(
     url: str,
     options: DownloadOptions,
@@ -1456,6 +1511,11 @@ def download_douyin_url(
     cancel_callback: CancelCallback | None = None,
 ) -> DownloadResult:
     info = _fetch_douyin_info(url, options)
+    # Send source metadata before filenames are sanitized or transfers begin.
+    progress_callback({"status": "resolving", "info_dict": {
+        "id": info.aweme_id, "title": info.title, "uploader": info.author_name,
+        "upload_date": info.publish_date,
+    }})
     base_name = _safe_file_name(info.title, f"抖音视频 {info.aweme_id}")
     publish_date = info.publish_date or "未知日期"
     base_dir = options.output_dir / "Douyin"
