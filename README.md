@@ -12,11 +12,11 @@
 
 ![南枫下载 Windows 下载历史](docs/assets/nanfeng-downloader-windows-history.png)
 
-预览来自 Windows v2026.10.16.2 的冻结 EXE 实际运行界面：主工作台 1820 × 1000、设置页 760 × 620；队列与历史为脱敏演示数据，历史封面来自合成风景媒体，未启动公网下载。
+预览来自 Windows v2026.10.17 的冻结 EXE 实际运行界面：主工作台 1820 × 1000、设置页 760 × 620；队列与历史为脱敏演示数据，历史封面来自合成风景媒体，未启动公网下载。
 
 ## 下载安装
 
-Windows 安装包：[v2026.10.16.2](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.16.2-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.16.2.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
+Windows 安装包：[v2026.10.17](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.17-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.17.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
 
 Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 
