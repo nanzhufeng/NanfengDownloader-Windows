@@ -1,4 +1,8 @@
-2026-10-17 用户明确暂停当前Cloudflare问题修复，转为打包上传GitHub。不要继续读取Cookie、启动浏览器或探测该站点。准备v2026.10.17.1，发布已完成的blob播放器、原标题传递、资源预加载和失败终态修正；Cloudflare未解决写入版本说明。按docs/RELEASING.md云构建正式发布、精确提交、单Setup附件与本地下载回验。当前发布未完成，后续记录为诊断历史。
+# 当前交接
+
+2026-10-17 v2026.10.17.1已正式发布并回验：用户暂停Cloudflare修复，禁止继续浏览器／Cookie／实站探针。准确源码及发布标签为6f1aed637b23c0732011a8b04f6ae0394e6e72df；云运行39015112646成功，正式latest只有一个Setup附件。本地240测试46.906秒、云端240测试64.384秒、冻结启动／随包工具及14项发布结构检查通过。完整正式下载183693391字节，ProductVersion／FileVersion 2026.10.17.1，实际NotSigned；SHA-256与GitHub资产digest一致。安装包和receipt-v2026.10.17.1.json位于D:/ReleaseUpload/NanfengDownloader/，README采用本次冻结EXE预览；完整证据docs/verification/release-20261017-1.md。未在本机安装／升级／卸载精确包，未下载完整候选ZIP进行第二份EXE哈希比对。不要重建／覆盖正式版本，不把源码绿灯称为CF下载修复。
+
+## 历史诊断与开发记录
 
 2026-10-17 Chrome正常退出后限定检查完成：只读SQL仅本站验证Cookie元数据，1条未过期cf_clearance，前缀v20。未解密／导出值、未发送Cookie、未下载媒体。Chromium官方代码确认v20为App-Bound；当前yt-dlp Windows解密器不支持此读取路线。不得绕过Chrome加密／策略／注入，也不再让用户保持Chrome关闭或重复匿名重试；其Chrome可重新使用。该作品仍未修复。下一步若开发浏览器内授权接口，须区分源码接入与扩展安装／持久授权；后者不能直接沿用此次单站单次Cookie检查许可。首次诊断uri开关已纠正，不混淆前序真实Win32共享锁。收据chrome-site-session-unlocked-check.json，验证说明最终段；无源码、测试、打包变化。
 
