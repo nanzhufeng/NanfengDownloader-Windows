@@ -4,6 +4,22 @@ import re
 from urllib.parse import urlparse
 
 
+_PLAYER_SOURCES = """els => els.flatMap(media => {
+    if (!media.getClientRects().length || media.mediaKeys) return [];
+    const direct = media.currentSrc || media.src || media.querySelector('source')?.src || '';
+    if (direct && !direct.startsWith('blob:')) return [direct];
+    // Read the configuration of the instance that owns this visible element.
+    // Network requests and unrelated player/ad configurations are not evidence.
+    return [window.my_player, window.player].flatMap(player => {
+        if (!player || (player.media !== media && player.video !== media)) return [];
+        const source = player.config?.url;
+        if (typeof source !== 'string' || !source) return [];
+        try { return [new URL(source, document.baseURI).href]; }
+        catch (_) { return []; }
+    });
+})"""
+
+
 def clean_page_title(title):
     title = re.sub(r"\s+", " ", title or "").strip()
     title = re.sub(r"\s*(?:在线播放|在线观看).*?$", "", title).strip()
@@ -39,6 +55,7 @@ def resolve_browser_media(url, cancel=None):
     from .douyin import _find_chrome_path, _background_browser_args
     from .downloader import raise_if_cancelled
 
+    raise_if_cancelled(cancel)
     path = _find_chrome_path()
     if not path:
         raise RuntimeError("动态播放器解析需要安装 Chrome 或 Edge。")
@@ -47,6 +64,11 @@ def resolve_browser_media(url, cancel=None):
         try:
             context = browser.new_context(accept_downloads=False)
             context.set_default_timeout(3000)
+            # Resolve sources without preloading the video or decorative assets.
+            context.route('**/*', lambda route: route.abort()
+                if route.request.resource_type in {'image', 'font', 'media'}
+                or urlparse(route.request.url).path.lower().endswith(('.ts', '.m4s', '.mp4', '.aac'))
+                else route.continue_())
             page = context.new_page()
             response = page.goto(url, wait_until="domcontentloaded", timeout=20000)
             if response and response.status in {401, 403, 429}:
@@ -61,8 +83,7 @@ def resolve_browser_media(url, cancel=None):
                 found = []
                 for frame in page.frames:
                     try:
-                        sources = frame.locator("video, audio").evaluate_all(
-                            "els => els.filter(e => e.getClientRects().length).map(e => e.currentSrc || e.src || e.querySelector('source')?.src || '')")
+                        sources = frame.locator("video, audio").evaluate_all(_PLAYER_SOURCES)
                         found.extend((src, frame.url) for src in sources)
                     except Error:
                         continue  # frame may detach during player initialization

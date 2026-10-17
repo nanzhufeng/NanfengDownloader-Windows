@@ -11,10 +11,18 @@
 
 ## 凭据、传输与输出
 
-未知网站匿名，不借用平台 Cookie；yt-dlp 负责站点与网页解析，aria2 负责已发现地址的传输。沿用按站点验证的加速参数，不对所有站点强制同一并发。不绕过登录、付费或 DRM。输出按来源域名与既有命名／有效媒体规则处理，没有准确产物必须失败。
+未知网站默认匿名，不借用平台 Cookie；yt-dlp 负责站点与网页解析，aria2 负责已发现地址的传输。沿用按站点验证的加速参数，不对所有站点强制同一并发。不绕过登录、付费或 DRM。输出按来源域名与既有命名／有效媒体规则处理，没有准确产物必须失败。
+
+遇到明确的 Cloudflare 网页验证时，仅追加一次 `generic:impersonate` 兼容提取，不把网页403当作媒体分片限速反复降低并发。仍受阻时显示中文原因，保留原标题和失败任务，清空重连／等待等正在进行的显示。
+
+兼容请求仍失败即结束当前任务，不弹出人工验证浏览器、不自动循环重试。原任务保留，方便稍后由用户主动重试。普通浏览器可以播放并不证明软件匿名请求已获准。
+
+动态播放器先读取可见音视频元素的直接来源；遇到blob时，只接受明确绑定该可见元素的播放器实例所声明的HTTP／HTTPS来源。忽略不绑定当前视频的实例与广告，不从任意网络请求猜测；存在多个来源时仍明确失败。已挂载媒体密钥的DRM元素不参与解析。后台解析屏蔽媒体预加载、常见分片及装饰图片／字体；最多等待12秒播放器初始化，可取消。
+
+动态网页已确认的原标题同时用于输出文件和进度元数据，CDN清单／文件编号不能覆盖原标题；列表和历史沿用同一来源标题。此修复应用于后续解析和下载，不主动扫描或改写既有用户历史。
 
 通用媒体能力不保存任意 ZIP/PDF，也不冒充全网浏览器嗅探；本地 .torrent 为独立 BT 功能，磁力元数据尚未实现，见 [BT 合同](torrent-download.md)。
 
 ## 验证边界
 
-当前行为回归：test_generic_websites、test_generic_collection、test_web_collection、test_generic_media_integration、test_web_media。历史 HTTP 嵌入视频、W3C 直链及站点样本只证明对应日期与输入；当前全平台公网性能须独立验证，状态见 PROJECT_STATUS。
+当前行为回归：test_generic_websites、test_generic_collection、test_web_collection、test_generic_media_integration、test_web_media；test_generic_challenge、test_blob_player覆盖有界兼容重试、失败终态、真实Chromium blob播放器绑定、无关来源与DRM排除。历史 HTTP 嵌入视频、W3C 直链及站点样本只证明对应日期与输入；当前全平台公网性能须独立验证，状态见 PROJECT_STATUS。

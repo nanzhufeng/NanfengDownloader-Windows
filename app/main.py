@@ -76,8 +76,8 @@ from .history_page import HistoryPage, shell_icon
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.17"
-APP_DEVELOPED_AT = "2026-10-17 11:03"
+APP_VERSION = "v2026.10.17.1"
+APP_DEVELOPED_AT = "2026-10-17 15:49"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -2942,6 +2942,9 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_item_started(self, row: int) -> None:
+        status_item = self.table.item(row, COL_STATUS)
+        if status_item:
+            status_item.setToolTip('')
         self.row_transfer_metrics[row]={'started':time.monotonic(),'first_byte':None,'files':{},'network_bytes':0,
                                         'peak_speed':0,'connections':1,'retries':0}
         self._set_row_output_files(row, [])
@@ -3120,9 +3123,14 @@ class MainWindow(QMainWindow):
 
     @Slot(int, str)
     def _on_item_failed(self, row: int, error: str) -> None:
+        title_item = self.table.item(row, COL_TITLE)
+        if title_item and title_item.data(Qt.UserRole):
+            self._set_cell(row, COL_TITLE, str(title_item.data(Qt.UserRole)))
+        self._set_cell(row, COL_SPEED, '-')
+        self._set_cell(row, COL_ETA, '-')
+        self._set_cell(row, COL_PROGRESS, '等待联网' if is_network_error_text(error) else '失败')
         if is_network_error_text(error):
             self._set_row_status(row, "等待联网")
-            self._set_cell(row, COL_TITLE, error[:180])
             self.latest_failure_detail = error
             self._set_cell(row, COL_SPEED, "-")
             self._set_cell(row, COL_ETA, "-")
@@ -3137,7 +3145,6 @@ class MainWindow(QMainWindow):
             return
         if is_youtube_auth_error_text(error):
             self._set_row_status(row, "失败")
-            self._set_cell(row, COL_TITLE, "YouTube 需要重新登录，已暂停后续下载")
             self._set_cell(row, COL_SPEED, "-")
             self._set_cell(row, COL_ETA, "-")
             if not self.youtube_auth_blocked:
@@ -3149,7 +3156,7 @@ class MainWindow(QMainWindow):
             self._update_main_progress()
             return
         self._set_row_status(row, "失败")
-        self._set_cell(row, COL_TITLE, error[:180])
+        self.table.item(row, COL_STATUS).setToolTip(error)
         self.latest_failure_detail = error
         self.status_label.setText(f"下载失败：{error[:180]}")
         self._update_main_progress()
@@ -3157,7 +3164,9 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_item_stopped(self, row: int) -> None:
         self._set_row_status(row, "已停止")
-        self._set_cell(row, COL_PROGRESS, self.table.item(row, COL_PROGRESS).text() if self.table.item(row, COL_PROGRESS) else "0%")
+        current_progress = self._cell_text(row, COL_PROGRESS)
+        transient = {'', '等待验证', '解析中', '重连中', '处理中', '转码中', '等待数据'}
+        self._set_cell(row, COL_PROGRESS, '已停止' if current_progress in transient else current_progress)
         self._set_cell(row, COL_SPEED, "-")
         self._set_cell(row, COL_ETA, "-")
         self._update_main_progress()

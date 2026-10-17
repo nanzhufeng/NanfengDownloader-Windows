@@ -1,3 +1,17 @@
+2026-10-17 用户明确暂停当前Cloudflare问题修复，转为打包上传GitHub。不要继续读取Cookie、启动浏览器或探测该站点。准备v2026.10.17.1，发布已完成的blob播放器、原标题传递、资源预加载和失败终态修正；Cloudflare未解决写入版本说明。按docs/RELEASING.md云构建正式发布、精确提交、单Setup附件与本地下载回验。当前发布未完成，后续记录为诊断历史。
+
+2026-10-17 Chrome正常退出后限定检查完成：只读SQL仅本站验证Cookie元数据，1条未过期cf_clearance，前缀v20。未解密／导出值、未发送Cookie、未下载媒体。Chromium官方代码确认v20为App-Bound；当前yt-dlp Windows解密器不支持此读取路线。不得绕过Chrome加密／策略／注入，也不再让用户保持Chrome关闭或重复匿名重试；其Chrome可重新使用。该作品仍未修复。下一步若开发浏览器内授权接口，须区分源码接入与扩展安装／持久授权；后者不能直接沿用此次单站单次Cookie检查许可。首次诊断uri开关已纠正，不混淆前序真实Win32共享锁。收据chrome-site-session-unlocked-check.json，验证说明最终段；无源码、测试、打包变化。
+
+2026-10-17 本站Chrome会话已获用户明确授权：仅xmorex.com验证Cookie、仅当前链接解析，不下载视频。只读SELECT限定本站四个域和cf_clearance／__cf_bm；Cookie数据库打不开，Win32正常只读打开检查返回32共享冲突，Cookie数据实际读取0。用户答“暂时不能退出”，必须保留Chrome运行，不再要求重复授权、不强杀、不复制整库、不绕过文件锁／Chrome加密。当前阻塞为浏览器库不可读；用户日后能正常退出并要求继续时可沿用本站／本次范围授权，再检查加密格式，仍不得承诺会话一定可复用。收据chrome-site-session-scope-check.json；无源码／测试／发布变化，原240测试不是此站绿灯。
+
+2026-10-17 已分析用户保存HTML，无源码改动：178652字节／3207行，正常作品页，主video显式同源HLS且编号与作品一致。HEAD及带Referer有界GET清单均403，GET有cf-mitigated=challenge；媒体分片请求为0。官方download签名入口外层requireLogin，未调用。浏览器能力无Cookie接口，pageAssets.list仍超时，未读Chrome凭据。下一步必须获得用户对仅本站／本次解析复用Chrome验证Cookie的明确授权，再验证能否安全读取；不得读取其他网站、绕过Chrome加密、保存凭据或承诺Cookie一定有效。原始用户HTML留原处，不复制入项目。收据saved-page-source-head.json、saved-page-source-get.json；本次没有可交付的CF下载修复。
+
+2026-10-17 Cloudflare再次诊断，无代码改动：当前运行确为本工作区start.py；系统／Python HTTPS代理配置同为127.0.0.1:7890，不能推断出口或会话一致。新Chrome兼容请求0.332秒仍403且cf-mitigated=challenge。Chrome标签页连接成功，DOM整体及单video属性读取均超时；用户答扩展“没有任何提示”，不得继续把问题归因于未授权。未读取Cookie／资料或开验证窗。缺少最小实站证据：用户现用Chrome保存作品页“网页，仅HTML”，供确认播放器入口；未取得前仍未解决，不改更多重试参数。证据cloudflare-current-route.json和验证说明最新段；前序240测试属于原标题等源码修复，不代表CF下载成功。
+
+2026-10-17 最新原标题纠正：动态网页fallback虽用原网页标题命名文件，但CDN后续info_dict.title覆盖列表／历史。download_url现在在统一进度入口保留已确认source_title，媒体编号不再覆盖；真实Chromium＋本地HTTP＋yt-dlp＋FFmpeg fixture红转绿，实际进度重放Qt历史入口验证原标题，9项定向9.395秒／240项完整回归64.290秒通过。既有用户历史未改写，本次未提交／打包／发布。Cloudflare仍未解决；用户确认Chrome，浏览器清单存在该作品页但只读连接连续超时，未读取Cookie／资料或重开验证窗口。新增tests/test_generic_original_title.py；证据generic-title-final-red.txt、generic-title-green.txt、generic-title-full-tests.txt。当前源码BAT入口不变；下方为前序记录。
+
+2026-10-17 当前本地增量（覆盖下方发布后的源码状态）：main基线a1d1a81之后未提交。用户明确否定独立Cloudflare验证窗口；已关闭本任务窗口并删除site_verification及其入口／测试，不再弹窗。保留有界generic:impersonate兼容重试及失败原标题／瞬态进度修正。第一条实站仍403；第二条作品根因为blob来源未读取绑定播放器配置，app/web_media.py已修复，真实解析3.897秒、1个HLS格式、未下载完整媒体。239项完整回归40.367秒通过；当前源码入口启动南枫下载.bat，未打包发布，不冒称既有v2026.10.17含修复。详见docs/PROJECT_STATUS.md顶部、docs/verification/generic-challenge-20261017.md；脱敏实站收据.verification-downloads/blob-player-live-result.json，测试generic-final-full-tests.txt。后续仅在用户要求时打包／上传。
+
 2026-10-17 发布完成：v2026.10.17-windows为正式latest；源码标签f3e4fca2627d1536d7c459b5489b208f41a2a086，云运行38997384366成功。本地／云端233项测试及14项发布结构检查通过；183696841字节Setup实际NotSigned，正式下载与完整云候选EXE、GitHub摘要一致。README采用当前冻结EXE预览。文件／收据D:/ReleaseUpload/NanfengDownloader/，证据docs/verification/release-20261017.md；未实际安装／升级／卸载精确云包。源码入口启动南枫下载.bat；后续未发布措辞保留为历史记录。
 
 2026-10-17 v2026.10.17发布准备：包含完成下载移入历史和历史操作图标／配色修正；本地233项完整回归41.505秒通过，compileall／diff检查通过。版本说明docs/release-2026.10.17.md；使用scripts/publish_windows_release.ps1 -Publish云构建正式发布，最终收据待完成。此前本地增量条目为历史记录。

@@ -684,8 +684,16 @@ def _apply_single_media_download_options(url: str, ydl_options: dict[str, Any]) 
         ydl_options["noplaylist"] = True
 
 
+def is_cloudflare_challenge_error(exc: Exception) -> bool:
+    detail = str(exc).lower()
+    return 'cloudflare' in detail and ('challenge' in detail or 'anti-bot' in detail)
+
+
 def _is_fragment_rate_limit_error(exc: Exception) -> bool:
     detail = str(exc).lower()
+    # A rejected work page is not a fragment-concurrency failure.
+    if is_cloudflare_challenge_error(exc) or ('[generic]' in detail and '403' in detail):
+        return False
     if "sign in to confirm" in detail or "not a bot" in detail:
         return False
     return any(
@@ -1012,8 +1020,12 @@ def download_url(
     options.output_dir.mkdir(parents=True, exist_ok=True)
     before = _snapshot_files(options.output_dir)
     completed_paths: set[Path] = set()
+    source_title: str | None = None
 
     def track_progress(info: dict[str, Any]) -> None:
+        if source_title:
+            # The CDN extractor's title may be only a hash or manifest basename.
+            info = {**info, 'info_dict': {**(info.get('info_dict') or {}), 'title': source_title}}
         if info.get("status") == "finished" and info.get("filename"):
             completed_paths.add(Path(info["filename"]).resolve())
         data = info.get("info_dict") or {}
@@ -1023,6 +1035,7 @@ def download_url(
 
     auth_platform = _auth_platform_for_url(url)
     managed_cookie_file: Path | None = None
+    browser_compat_attempted = False
     try:
         if options.cookie_mode == AUTH_COOKIE_MODE and auth_platform:
             managed_cookie_file = export_auth_cookies_txt(auth_platform)
@@ -1058,6 +1071,16 @@ def download_url(
                 )
                 break
             except Exception as exc:
+                if platform == '其他网站' and is_cloudflare_challenge_error(exc) and not browser_compat_attempted:
+                    raise_if_cancelled(cancel_callback)
+                    browser_compat_attempted = True
+                    extractor_args = dict(ydl_options.get('extractor_args') or {})
+                    generic_args = dict(extractor_args.get('generic') or {})
+                    generic_args['impersonate'] = ['']
+                    extractor_args['generic'] = generic_args
+                    ydl_options['extractor_args'] = extractor_args
+                    progress_callback({'status': 'resolving', 'reason': '站点要求浏览器验证，正在尝试浏览器兼容请求。'})
+                    continue
                 if attempt + 1 >= YOUTUBE_PUBLIC_REQUEST_ATTEMPTS or not should_retry_public_youtube_request(exc):
                     raise
                 progress_callback(
@@ -1070,13 +1093,21 @@ def download_url(
     except Exception as exc:
         if isinstance(exc, DownloadStopped):
             raise
-        if "Requested format is not available" in str(exc):
+        needs_verification = platform == '其他网站' and browser_compat_attempted and (is_cloudflare_challenge_error(exc) or '403' in str(exc))
+        if needs_verification:
+            raise RuntimeError('站点仍要求浏览器验证（HTTP 403），浏览器兼容请求未通过。'
+                               '本次已停止，请稍后重试。') from exc
+        elif platform == '其他网站' and browser_compat_attempted and 'impersonat' in str(exc).lower() and any(word in str(exc).lower() for word in ('not available', 'unavailable', 'not supported')):
+            raise RuntimeError('浏览器兼容组件不可用，请更新完整安装包后重试。') from exc
+        elif "Requested format is not available" in str(exc):
             raise RuntimeError(f"源站没有符合“{options.quality}”的可用画质（或未提供分辨率信息），未下载更高分辨率。可手动选择其他画质后重试。") from exc
-        if platform == "其他网站" and "Unsupported URL" in str(exc):
+        elif platform == "其他网站" and "Unsupported URL" in str(exc):
             from .web_media import resolve_browser_media
             progress_callback({"status": "resolving", "reason": "正在解析动态网页播放器"})
             media_url, referer, page_title = resolve_browser_media(url, cancel_callback)
             if page_title:
+                source_title = page_title
+                track_progress({'status': 'resolving', 'info_dict': {'title': source_title}})
                 template = Path(ydl_options["outtmpl"])
                 title = safe_path_name(page_title).replace("%", "%%")[:120]
                 ydl_options["outtmpl"] = str(template.parent / generic_output_name(title, options.quality))

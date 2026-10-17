@@ -16,7 +16,7 @@
 
 ## 下载安装
 
-Windows 安装包：[v2026.10.17](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.17-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.17.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
+Windows 安装包：[v2026.10.17.1](https://github.com/nanzhufeng/NanfengDownloader-Windows/releases/tag/v2026.10.17.1-windows)，使用 Inno Setup 7 构建。更新内容见[版本说明](docs/release-2026.10.17.1.md)，验证进度见 [项目状态](docs/PROJECT_STATUS.md)。
 
 Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen 可能显示“未知发布者”；请确认下载地址后安装。
 
@@ -35,7 +35,7 @@ Windows 版本按默认规则以未签名安装包发布，Windows SmartScreen �
 - TikTok 支持单视频、分享文本和作者主页，使用独立软件内登录资料，列表只保留目标作者作品。
 - 小红书只把视频笔记加入队列，图文笔记不会伪装成视频；作者页被平台遮蔽时会明确提示软件内登录。
 - Pornhub 支持公开单视频链接直接入队；不承诺会员、私密或 DRM 内容，也不把该站链接误交给 YouTube 解析。
-- 下载完成后可在对应队列行点击“定位”，直接打开 Windows 资源管理器并选中该任务的准确输出文件。
+- 下载完成后可在历史记录中选择“定位原文件”，直接打开 Windows 资源管理器并选中该任务的准确输出文件。
 - 链接输入区提供独立“清空链接”按钮，只清空输入内容，不影响已经读取的下载队列。
 - 单视频只加入一条；集合链接读取可勾选作品列表。B站明确 p= 只读指定分 P；不带 p 的多 P 页面保留选集。
 - 抖音与 YouTube 单作品快速入队；抖音短链只解析跳转身份，完整标题、作者和媒体地址在下载时获取；不会为入队重复启动媒体嗅探。
