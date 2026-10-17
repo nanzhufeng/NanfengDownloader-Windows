@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
+from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QRectF, QSize, QPersistentModelIndex, QSettings, Qt, QThread, QTimer, QUrl, Signal, Slot, QSemaphore
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QFontMetrics, QIcon, QPixmap, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QApplication,
@@ -76,8 +76,8 @@ from .history_page import HistoryPage, shell_icon
 
 
 APP_NAME = "南枫下载"
-APP_VERSION = "v2026.10.16.2"
-APP_DEVELOPED_AT = "2026-10-16 19:10"
+APP_VERSION = "v2026.10.17"
+APP_DEVELOPED_AT = "2026-10-17 11:03"
 APP_GITHUB_REPOSITORY = "nanzhufeng/NanfengDownloader-Windows"
 APP_GITHUB_URL = "https://github.com/nanzhufeng/NanfengDownloader-Windows"
 SETTINGS_ORGANIZATION = "Nanzhufeng"
@@ -989,6 +989,7 @@ class MainWindow(QMainWindow):
         self.network_check_thread: QThread | None = None
         self.network_check_worker: NetworkCheckWorker | None = None
         self.active_download_rows: set[int] = set()
+        self._archived_queue_rows: set[int] = set()
         self.discovery_had_error = False
         self.discovery_source_text = ""
         self.discovery_limit = 500
@@ -1980,7 +1981,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(button_feedback_stylesheet(stylesheet.replace("__CHEVRON_ICON__", chevron_icon)) + footer_style)
 
     def _update_status(self) -> None:
-        self.status_label.setText(f"队列: {self.table.rowCount()} 项")
+        self.status_label.setText(f"队列: {self.table.rowCount()-len(self._archived_queue_rows)} 项")
 
     def _on_playback_fullscreen(self, enabled: bool) -> None:
         self.sidebar.setVisible(not enabled)
@@ -2139,6 +2140,8 @@ class MainWindow(QMainWindow):
     def _queue_state_payload(self) -> dict[str, object]:
         rows: list[dict[str, object]] = []
         for row in range(self.table.rowCount()):
+            if row in self._archived_queue_rows:
+                continue
             link_item = self.table.item(row, COL_LINK)
             if not link_item or not link_item.text().strip():
                 continue
@@ -2198,11 +2201,19 @@ class MainWindow(QMainWindow):
         if not isinstance(rows, list):
             return
 
+        retired_completed = False
         self._restoring_queue = True
         try:
             for saved_row in rows[:2000]:
                 if not isinstance(saved_row, dict):
                     continue
+                if saved_row.get('status') == '完成' and self.history_store is not None:
+                    try:
+                        if self.history_store.archive_completed_queue_row(saved_row):
+                            retired_completed = True
+                            continue
+                    except (OSError, sqlite3.Error, ValueError):
+                        pass  # Keep the completed row recoverable if archival still fails.
                 url = str(saved_row.get("url") or "").strip()
                 if not url or (detect_platform(url) == "未知" and not url.startswith('torrent:')):
                     continue
@@ -2245,6 +2256,8 @@ class MainWindow(QMainWindow):
         finally:
             self._restoring_queue = False
         self._last_queue_state_json = raw_state
+        if retired_completed:
+            self._persist_queue_state()
 
     def _cell_text(self, row: int, column: int) -> str:
         item = self.table.item(row, column)
@@ -2595,7 +2608,8 @@ class MainWindow(QMainWindow):
         button.setObjectName("LocateButton")
         button.setEnabled(False)
         button.setToolTip("下载完成后可在资源管理器中选中对应文件")
-        button.clicked.connect(lambda _checked=False, target_row=row: self._reveal_row_output(target_row))
+        target = QPersistentModelIndex(self.table.model().index(row, COL_LINK))
+        button.clicked.connect(lambda _checked=False: self._reveal_row_output(target.row()) if target.isValid() else None)
         self.table.setCellWidget(row, COL_LOCATE, button)
 
     def _set_row_output_files(self, row: int, files: object) -> None:
@@ -2887,6 +2901,7 @@ class MainWindow(QMainWindow):
             self.status_label.setText("正在停止当前下载，请稍等几秒。")
 
     def _clear_queue(self) -> None:
+        self._archived_queue_rows.clear()
         self.table.setRowCount(0)
         self.row_output_files.clear()
         self.row_transfer_metrics.clear()
@@ -3030,6 +3045,8 @@ class MainWindow(QMainWindow):
 
     @Slot(int, str, object)
     def _on_item_finished(self, row: int, file_name: str, files: object) -> None:
+        if row < 0 or row >= self.table.rowCount() or row in self._archived_queue_rows:
+            return
         title_item = self.table.item(row, COL_TITLE)
         source_title = (title_item.data(Qt.UserRole) or title_item.text()) if title_item else file_name
         self._set_row_status(row, "完成")
@@ -3052,11 +3069,17 @@ class MainWindow(QMainWindow):
                 url=link.text(), platform=self._cell_text(row, COL_PLATFORM),
                 creator=self._cell_text(row, COL_CREATOR), quality=self._row_quality(row),
                 files=[str(path) for path in self.row_output_files.get(row, [])], completed_at=time.time(),report=report)
+            # Preserve worker row identities until it stops, but immediately
+            # remove successful archival from the visible/persisted queue.
+            self._archived_queue_rows.add(row)
+            self.table.setRowHidden(row, True)
             self.history_page.notify_changed()
         except (OSError, sqlite3.Error, ValueError) as exc:
             self.status_label.setText(f'下载已完成，但历史记录保存失败：{exc}')
         self._persist_queue_state()
         self._update_main_progress()
+        if self.worker_thread is None and not self.active_download_rows:
+            self._purge_archived_queue_rows()
 
     @Slot(int, str, object)
     def _on_item_skipped(self, row: int, message: str, files: object = None) -> None:
@@ -3154,10 +3177,34 @@ class MainWindow(QMainWindow):
         self._show_download_summary(counts)
         self.active_download_rows.clear()
 
+    def _purge_archived_queue_rows(self) -> None:
+        if not self._archived_queue_rows:
+            return
+        # Compact only after the worker's fixed row ids are no longer in flight.
+        mapping = {old: new for new, old in enumerate(
+            row for row in range(self.table.rowCount()) if row not in self._archived_queue_rows)}
+        blocked = self.table.blockSignals(True)
+        try:
+            for row in sorted(self._archived_queue_rows, reverse=True):
+                self.table.removeRow(row)
+            self.row_output_files = {mapping[row]: files for row, files in self.row_output_files.items() if row in mapping}
+            self.row_transfer_metrics = {mapping[row]: metrics for row, metrics in self.row_transfer_metrics.items() if row in mapping}
+            self.active_download_rows = {mapping[row] for row in self.active_download_rows if row in mapping}
+            self.check_drag_rows.clear()
+            self.check_drag_active = False
+            self._archived_queue_rows.clear()
+            for row in range(self.table.rowCount()):
+                self._set_cell(row, COL_INDEX, str(row+1))
+        finally:
+            self.table.blockSignals(blocked)
+        self._persist_queue_state()
+        self._update_status()
+
     @Slot()
     def _cleanup_worker(self) -> None:
         self.worker_thread = None
         self.worker = None
+        self._purge_archived_queue_rows()
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.clear_button.setEnabled(True)

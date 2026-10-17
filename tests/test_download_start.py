@@ -37,7 +37,7 @@ class DownloadStartTests(unittest.TestCase):
             self.assertEqual(window.table.item(0,COL_TITLE).text(), title)
             self.assertEqual(window.table.item(0,COL_CREATOR).text(), '实测作者')
             window._on_item_finished(0, output.name, [str(output)])
-            self.assertEqual(window.table.item(0,COL_TITLE).text(), title)
+            self.assertEqual(window.table.rowCount(), 0)
             self.assertEqual({record.title for record in window.history_store.query()}, {title})
             self.assertEqual(tuple(Path(f).resolve() for f in window.history_store.query()[0].files), (output.resolve(),))
             self.assertTrue(output.exists())
@@ -79,6 +79,7 @@ class DownloadStartTests(unittest.TestCase):
                 while window.worker_thread is not None and time.monotonic() < deadline:
                     QTest.qWait(10)
                 self.assertIsNone(window.worker_thread)
+                self.assertEqual(window.table.rowCount(), 0)
                 self.assertEqual(len(window.history_store.query()), 1)
                 self.assertEqual(window.history_store.query()[0].title, '原始标题')
                 self.assertIs(window.pages.currentWidget(), window.history_page)

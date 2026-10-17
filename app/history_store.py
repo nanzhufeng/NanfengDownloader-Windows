@@ -165,6 +165,24 @@ class HistoryStore:
         with self._connect() as db:
             db.executemany('DELETE FROM history WHERE id=?', ((value,) for value in ids))
 
+    def archive_completed_queue_row(self, row: dict) -> bool:
+        """Safely retire a saved completion, using the same receipt as legacy import."""
+        if not isinstance(row, dict) or row.get('status') != '完成':
+            return False
+        files = row.get('output_files')
+        if not isinstance(files, list) or not files or not row.get('url'):
+            return False
+        if not all(isinstance(path, str) and path.strip() and Path(path).is_absolute() for path in files):
+            return False
+        legacy_id = 'legacy-' + hashlib.sha256(json.dumps([row['url'], files], ensure_ascii=False).encode()).hexdigest()
+        history_id = row.get('history_id')
+        self.archive(history_id if isinstance(history_id, str) and history_id else legacy_id,
+                     title=str(row.get('source_title') or row.get('title') or '未命名'),
+                     url=str(row['url']), platform=str(row.get('platform') or '未知'),
+                     creator=str(row.get('creator') or ''), quality=str(row.get('quality') or ''),
+                     files=files, completed_at=None)
+        return True
+
     def import_queue(self, payload: dict):
         """Idempotent legacy import; preserve unknown completion times explicitly."""
         if payload.get('version') != 1 or not isinstance(payload.get('rows'), list):
@@ -173,19 +191,6 @@ class HistoryStore:
             if db.execute("SELECT 1 FROM metadata WHERE key='legacy_imported'").fetchone():
                 return
         for row in payload['rows']:
-            if not isinstance(row, dict) or row.get('status') != '完成':
-                continue
-            files = row.get('output_files')
-            if not isinstance(files, list) or not files or not row.get('url'):
-                continue
-            if not all(isinstance(path, str) and path.strip() and Path(path).is_absolute() for path in files):
-                continue
-            legacy_id = 'legacy-' + hashlib.sha256(json.dumps([row['url'], files], ensure_ascii=False).encode()).hexdigest()
-            history_id = row.get('history_id')
-            self.archive(history_id if isinstance(history_id, str) and history_id else legacy_id,
-                         title=str(row.get('source_title') or row.get('title') or '未命名'),
-                         url=str(row['url']), platform=str(row.get('platform') or '未知'),
-                         creator=str(row.get('creator') or ''), quality=str(row.get('quality') or ''),
-                         files=files, completed_at=None)
+            self.archive_completed_queue_row(row)
         with self._connect() as db:
             db.execute("INSERT OR IGNORE INTO metadata VALUES ('legacy_imported','1')")

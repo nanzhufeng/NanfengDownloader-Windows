@@ -31,6 +31,8 @@ from .windows_shell import reveal_file_in_explorer
 
 STATES = {'present': '已完成', 'partial': '部分文件缺失', 'missing': '文件已不存在',
           'unavailable': '暂时无法访问'}
+HISTORY_DELETE_COLOR = '#bd4944'
+HISTORY_CLEANUP_COLOR = '#a65d16'
 PAGE_STYLE = '''
 QWidget#HistoryPage { background: transparent; color: #2d3033; }
 QFrame#HistoryToolbar { background:transparent; border:none; }
@@ -63,8 +65,11 @@ QPushButton#HistorySelectionCircle:hover, QPushButton#HistorySelectionCircle:foc
 QPushButton#HistoryBack { background:transparent; color:#555d62; padding:0; min-width:36px; max-width:36px; min-height:36px; max-height:36px; border-radius:18px; }
 QPushButton#HistoryBack:hover, QPushButton#HistoryBack:focus { background:#e5e5e5; }
 QPushButton#HistoryBack:pressed { background:#dce0e4; }
-QPushButton#HistoryManageAction { background:#e5e7ec; color:#bd4944; padding:0 12px; min-width:0; }
+QPushButton#HistoryManageAction { background:#e5e7ec; color:__HISTORY_DELETE_COLOR__; padding:0 12px; min-width:0; }
+QPushButton#HistoryManageAction[actionTone="cleanup"] { color:__HISTORY_CLEANUP_COLOR__; }
 QPushButton#HistoryManageAction:hover, QPushButton#HistoryManageAction:focus { background:#eeeeee; }
+QPushButton#HistoryManageAction:pressed { background:#dce0e4; }
+QPushButton#HistoryManageAction:disabled, QPushButton#HistoryManageAction[actionTone="cleanup"]:disabled { color:#9aa3ad; background:#f4f4f4; }
 QPushButton:disabled { color: #9aa3ad; background: #f4f4f4; }
 QPushButton#HistoryMedia { background: transparent; border-radius: 10px; padding: 0;
     min-width: 116px; max-width: 116px; min-height: 84px; max-height: 84px; }
@@ -90,7 +95,7 @@ QScrollArea#HistoryScroll QScrollBar::add-page, QScrollArea#HistoryScroll QScrol
     background:transparent; border:none;
 }
 QScrollArea#HistoryScroll::corner { background:transparent; border:none; }
-'''
+'''.replace('__HISTORY_DELETE_COLOR__', HISTORY_DELETE_COLOR).replace('__HISTORY_CLEANUP_COLOR__', HISTORY_CLEANUP_COLOR)
 DIALOG_STYLE = '''
 QDialog { background: #ffffff; color: #303438; }
 QLabel, QListWidget { color: #303438; background: white; border: none; }
@@ -106,12 +111,26 @@ def shell_icon(code: int, color='#667782') -> QIcon:
     """Prefer scalable interface vectors; retain the native font for uncommon symbols."""
     vector = vector_shell_icon(code, color)
     if vector is not None: return vector
-    image = QPixmap(20, 20); image.fill(Qt.transparent)
-    painter = QPainter(image)
-    painter.setFont(QFont('Segoe MDL2 Assets', 12))
-    painter.setPen(QColor(color)); painter.drawText(image.rect(), Qt.AlignCenter, chr(code))
-    painter.end()
-    return QIcon(image)
+    icon = QIcon()
+    for edge in (20, 30, 40, 60, 80):
+        image = QPixmap(edge, edge); image.fill(Qt.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.TextAntialiasing)
+        font = QFont('Segoe MDL2 Assets'); font.setPixelSize(round(edge * .8))
+        painter.setFont(font)
+        painter.setPen(QColor(color)); painter.drawText(image.rect(), Qt.AlignCenter, chr(code))
+        painter.end()
+        icon.addPixmap(image)
+    return icon
+
+
+def management_action_icon(code: int, color: str) -> QIcon:
+    icon = QIcon()
+    for tone, mode in ((color, QIcon.Normal), ('#9aa3ad', QIcon.Disabled)):
+        source = shell_icon(code, tone)
+        for edge in (20, 30, 40, 60, 80):
+            icon.addPixmap(source.pixmap(QSize(edge, edge), QIcon.Normal), mode)
+    return icon
 
 
 class ResultSignals(QObject):
@@ -317,7 +336,8 @@ class HistoryPage(QWidget):
         filters.addWidget(self.favorites); filters.addStretch()
         self.bulk = self._button('批量删除', self._toggle_selection, filters)
         self.cleanup = self._button('清理失效', self._scan_missing, filters)
-        self.cleanup.setIcon(shell_icon(0xE74D, '#bd4944'))
+        self.cleanup.setProperty('actionTone', 'cleanup')
+        self.cleanup.setIcon(management_action_icon(0xEA99, HISTORY_CLEANUP_COLOR))
         self.cleanup.setIconSize(QSize(20, 20))
         self.bulk.setObjectName('HistoryManageAction');self.cleanup.setObjectName('HistoryManageAction')
         self.selection_bar = QWidget(); selection = QHBoxLayout(self.selection_bar)
@@ -331,7 +351,8 @@ class HistoryPage(QWidget):
         self.delete_selected = self._button('删除所选', self._delete_selected, selection)
         self.delete_selected.setObjectName('HistorySelectDelete'); self.delete_selected.setIcon(shell_icon(0xE74D))
         self.selection_bar.hide(); filters.addWidget(self.selection_bar)
-        self.bulk.setIcon(shell_icon(0xE74D))
+        self.bulk.setIcon(management_action_icon(0xE74D, HISTORY_DELETE_COLOR))
+        self.bulk.setIconSize(QSize(20, 20))
         toolbar_layout.addLayout(filters)
         root.addWidget(toolbar)
         self.feedback = QLabel(); self.feedback.setObjectName('HistoryFeedback')

@@ -191,7 +191,7 @@ class HistoryNavigationTests(unittest.TestCase):
         finally:
             timer.stop(); page.pool.waitForDone(); window.close(); app.processEvents()
 
-    def test_success_archives_original_title_and_navigation_preserves_queue(self):
+    def test_success_archives_original_title_and_navigation_preserves_input(self):
         import os
         os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
         from PySide6.QtWidgets import QApplication
@@ -211,7 +211,7 @@ class HistoryNavigationTests(unittest.TestCase):
             self.assertEqual(records[0].title, '原始作品标题')
             window.history_button.click(); app.processEvents()
             self.assertIs(window.pages.currentWidget(), window.history_page)
-            self.assertEqual(window.table.rowCount(), 1)
+            self.assertEqual(window.table.rowCount(), 0)
             window.history_page.back_requested.emit(); app.processEvents()
             self.assertIs(window.pages.currentWidget(), window.download_page)
             self.assertEqual(window.url_text.toPlainText(), '尚未提交的输入')

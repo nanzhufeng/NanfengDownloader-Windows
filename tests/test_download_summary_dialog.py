@@ -260,6 +260,7 @@ class DownloadSummaryDialogTests(unittest.TestCase):
             second_file.write_bytes(b"second")
             window = isolated_main_window()
             try:
+                window.active_download_rows = {0, 1}
                 for index, file_path in enumerate((first_file, second_file)):
                     window._add_queue_row(
                         url=f"https://example.test/{index}",
@@ -267,7 +268,6 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                         title=file_path.stem,
                     )
                     window._on_item_finished(index, file_path.name, [file_path])
-                window.active_download_rows = {0, 1}
                 window.completion_sound_enabled = False
                 window.result_summary_enabled = True
                 window.auto_reveal_output_enabled = True
@@ -298,9 +298,9 @@ class DownloadSummaryDialogTests(unittest.TestCase):
                         platform="测试平台",
                         title=f"视频 {index}",
                     )
+                window.active_download_rows = {0, 1}
                 window._on_item_finished(0, output_file.name, [output_file])
                 window._set_row_status(1, "失败")
-                window.active_download_rows = {0, 1}
                 window.completion_sound_enabled = False
                 window.result_summary_enabled = False
                 window.auto_reveal_output_enabled = True

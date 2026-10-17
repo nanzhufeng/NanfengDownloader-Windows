@@ -8,7 +8,7 @@ from PySide6.QtCore import QTimer
 
 
 def capture_release_preview(window, root):
-    from .main import AppSettingsDialog, APP_VERSION, COL_PROGRESS, COL_QUALITY
+    from .main import AppSettingsDialog, APP_VERSION, COL_QUALITY
 
     window.resize(1820, 1000)
     window.output_edit.setText('D:\\南枫下载')
@@ -20,8 +20,6 @@ def capture_release_preview(window, root):
             f'https://www.youtube.com/watch?v=preview-demo-{number}',
             'YouTube', f'示例视频 {number:02d} · 城市与自然记录', creator_name='示例频道',
         )
-    window._set_status_cell(0, '完成')
-    window._set_cell(0, COL_PROGRESS, '100%')
     window.table.cellWidget(0, COL_QUALITY).setCurrentText('1080p 及以下')
     window.status_label.setText('界面预览：脱敏演示数据，未启动下载。')
 

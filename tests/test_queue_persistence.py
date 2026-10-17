@@ -103,7 +103,7 @@ class QueuePersistenceTests(unittest.TestCase):
             finally:
                 restored.close()
 
-    def test_completed_row_keeps_existing_file_for_precise_reveal_but_is_not_reselected(self) -> None:
+    def test_completed_row_restores_only_in_history_and_keeps_existing_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             settings_path = root / "preferences.ini"
@@ -121,11 +121,12 @@ class QueuePersistenceTests(unittest.TestCase):
 
             restored = MainWindow(settings=self._settings(settings_path))
             try:
-                self.assertEqual(restored.table.item(0, COL_STATUS).text(), "完成")
-                self.assertEqual(restored.table.item(0, COL_SELECT).checkState(), Qt.Unchecked)
-                locate = restored.table.cellWidget(0, 11)
-                self.assertIsInstance(locate, QPushButton)
-                self.assertTrue(locate.isEnabled())
+                self.assertEqual(restored.table.rowCount(), 0)
+                records = restored.history_store.query()
+                self.assertEqual(len(records), 1)
+                self.assertEqual(records[0].title, "已完成视频")
+                self.assertEqual(tuple(Path(path).resolve() for path in records[0].files), (media_file.resolve(),))
+                self.assertTrue(media_file.exists())
             finally:
                 restored.close()
 

@@ -51,7 +51,7 @@ class QueueLocateButtonTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.window.close()
 
-    def test_completed_row_enables_locate_and_targets_its_exact_file(self) -> None:
+    def test_skipped_existing_file_enables_locate_and_targets_its_exact_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             output_file = Path(temp_dir) / "作者 A" / "2026-08-01 精确视频.mp4"
             output_file.parent.mkdir(parents=True)
@@ -67,9 +67,9 @@ class QueueLocateButtonTests(unittest.TestCase):
             self.assertIsInstance(button, QPushButton)
             self.assertFalse(button.isEnabled())
 
-            self.window._on_item_finished(0, output_file.name, [str(output_file)])
+            self.window._on_item_skipped(0, "文件已存在", [str(output_file)])
 
-            self.assertEqual(self.window.table.item(0, COL_STATUS).text(), "完成")
+            self.assertEqual(self.window.table.item(0, COL_STATUS).text(), "已跳过")
             self.assertTrue(button.isEnabled())
             with patch("app.main.reveal_file_in_explorer", return_value=output_file.resolve()) as reveal:
                 self.window._reveal_row_output(0)
@@ -87,7 +87,7 @@ class QueueLocateButtonTests(unittest.TestCase):
                     platform="测试平台",
                     title=file_path.stem,
                 )
-                self.window._on_item_finished(index, file_path.name, [file_path])
+                self.window._on_item_skipped(index, "文件已存在", [file_path])
 
             with patch("app.main.reveal_file_in_explorer", return_value=files[1].resolve()) as reveal:
                 self.window._reveal_row_output(1)
@@ -106,7 +106,7 @@ class QueueLocateButtonTests(unittest.TestCase):
                 platform="测试平台",
                 title="长标题",
             )
-            self.window._on_item_finished(0, output_file.name, [str(output_file)])
+            self.window._on_item_skipped(0, "文件已存在", [str(output_file)])
             self.app.processEvents()
             size_before = self.window.size()
             minimum_width_before = self.window.minimumSizeHint().width()
